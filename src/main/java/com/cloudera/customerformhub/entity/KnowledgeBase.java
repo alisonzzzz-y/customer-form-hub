@@ -46,6 +46,7 @@ public class KnowledgeBase {
             String question,
             String answer,
             String source,
+            LocalDateTime lastUpdated,
             String sharingStatus,
             String department,
             String embedding,
@@ -54,6 +55,7 @@ public class KnowledgeBase {
         this.question = question;
         this.answer = answer;
         this.source = source;
+        this.lastUpdated = lastUpdated;
         this.sharingStatus = sharingStatus;
         this.department = department;
         this.embedding = embedding;
@@ -63,17 +65,9 @@ public class KnowledgeBase {
     //set default values automatically before a new record is saved
     @PrePersist
     public void beforeInsert() {
-        this.lastUpdated = LocalDateTime.now();
-
         if (this.approved == null) {
             this.approved = false;
         }
-    }
-
-    //update the timestamp automatically before an existing record is updated
-    @PreUpdate
-    public void beforeUpdate() {
-        this.lastUpdated = LocalDateTime.now();
     }
 
     // Getters and Setters

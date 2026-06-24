@@ -7,18 +7,22 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "knowledge_base")
 public class KnowledgeBase {
-
     //PK
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    //Other attributes
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String question;
+//Other attributes
+    //from which document
+    @Column(name = "document_title", length = 255)
+    private String documentTitle;
+
+    //from which section of the document
+    @Column(name = "section_title", length = 255)
+    private String sectionTitle;
 
     @Column(nullable = false, columnDefinition = "LONGTEXT")
-    private String answer;
+    private String content;
 
     @Column(length = 500)
     private String source;
@@ -43,8 +47,9 @@ public class KnowledgeBase {
     }
 
     public KnowledgeBase(
-            String question,
-            String answer,
+            String documentTitle,
+            String sectionTitle,
+            String content,
             String source,
             LocalDateTime lastUpdated,
             String sharingStatus,
@@ -52,8 +57,9 @@ public class KnowledgeBase {
             String embedding,
             Boolean approved
     ) {
-        this.question = question;
-        this.answer = answer;
+        this.documentTitle = documentTitle;
+        this.sectionTitle = sectionTitle;
+        this.content = content;
         this.source = source;
         this.lastUpdated = lastUpdated;
         this.sharingStatus = sharingStatus;
@@ -79,20 +85,28 @@ public class KnowledgeBase {
         this.id = id;
     }
 
-    public String getQuestion() {
-        return question;
+    public String getDocumentTitle() {
+        return documentTitle;
     }
 
-    public void setQuestion(String question) {
-        this.question = question;
+    public void setDocumentTitle(String documentTitle) {
+        this.documentTitle = documentTitle;
     }
 
-    public String getAnswer() {
-        return answer;
+    public String getSectionTitle() {
+        return sectionTitle;
     }
 
-    public void setAnswer(String answer) {
-        this.answer = answer;
+    public void setSectionTitle(String sectionTitle) {
+        this.sectionTitle = sectionTitle;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public void setContent(String content) {
+        this.content = content;
     }
 
     public String getSource() {

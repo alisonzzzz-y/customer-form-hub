@@ -12,8 +12,11 @@ import java.util.List;
 @RequestMapping("/api/knowledge-base")
 public class KnowledgeBaseController {
 
+// constructor injection, controller needs service
+    // 1. declare a field - service, like an empty box
     private final KnowledgeBaseService knowledgeBaseService;
 
+    // 2. constructor
     public KnowledgeBaseController(KnowledgeBaseService knowledgeBaseService) {
         this.knowledgeBaseService = knowledgeBaseService;
     }

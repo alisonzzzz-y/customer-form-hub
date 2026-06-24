@@ -9,9 +9,9 @@ import java.util.List;
 @Service
 public class KnowledgeBaseService {
 
+    // constructor injection
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
-    // constructor injection
     public KnowledgeBaseService(KnowledgeBaseRepository knowledgeBaseRepository) {
         this.knowledgeBaseRepository = knowledgeBaseRepository;
     }

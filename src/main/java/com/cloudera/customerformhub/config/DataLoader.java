@@ -3,7 +3,7 @@ package com.cloudera.customerformhub.config;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
 import com.cloudera.customerformhub.service.EmbeddingService;
-import com.cloudera.customerformhub.service.RetrievalService;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -16,14 +16,11 @@ public class DataLoader implements CommandLineRunner {
 
     private final KnowledgeBaseRepository repository;
     private final EmbeddingService embeddingService;
-    private final RetrievalService retrievalService;
 
     public DataLoader(KnowledgeBaseRepository repository,
-                      EmbeddingService embeddingService,
-                      RetrievalService retrievalService) {
+                      EmbeddingService embeddingService) {
         this.repository = repository;
         this.embeddingService = embeddingService;
-        this.retrievalService = retrievalService;
     }
 
     private LocalDateTime d(int year, int month, int day) {
@@ -32,18 +29,16 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // Generate embeddings for all chunks and skip existing ones.
-        embeddingService.generateEmbeddingsForAll();
-        String testQuestion = "Do you encrypt customer data?";
-        System.out.println("\n>>> Searching for: " + testQuestion);
-        List<KnowledgeBase> results = retrievalService.search(testQuestion);
-        for (KnowledgeBase r : results) {
-            System.out.println("   - [" + r.getSectionTitle() + "] " + r.getContent().substring(0, 60) + "...");
-        }
-        if (repository.count() > 0) {
-            return;
+        // Seed the 20 chunks if the table is empty
+        if (repository.count() == 0) {
+            seedData();
         }
 
+        // Generate embeddings for chunks that don't have one yet
+        embeddingService.generateEmbeddingsForAll();
+    }
+
+    private void seedData() {
         // the order of parameters
         repository.save(new KnowledgeBase("Company Overview", "Company background",
                 "Northwind Data Ltd. is a data platform company providing enterprise data management and analytics software. It was founded in 2008 and is incorporated in Ireland, with its registered office in Dublin. It serves customers across financial services, healthcare, telecommunications and the public sector.",

@@ -1,6 +1,7 @@
 package com.cloudera.customerformhub.controller;
 
 import com.cloudera.customerformhub.dto.SearchRequest;
+import com.cloudera.customerformhub.dto.SearchResult;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
 import com.cloudera.customerformhub.service.KnowledgeBaseService;
 import com.cloudera.customerformhub.service.RetrievalService;
@@ -31,7 +32,7 @@ public class KnowledgeBaseController {
     }
 
     @PostMapping("/search")
-    public List<KnowledgeBase> search(@RequestBody SearchRequest request) {
+    public List<SearchResult> search(@RequestBody SearchRequest request) {
         return retrievalService.search(request.getQuestion());
     }
 }

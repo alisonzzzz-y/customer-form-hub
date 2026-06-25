@@ -1,5 +1,6 @@
 package com.cloudera.customerformhub.service;
 
+import com.cloudera.customerformhub.dto.SearchResult;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -22,20 +23,21 @@ public class RetrievalService {
     }
 
     // Search for the top 3 most relevant chunks for a question.
-    public List<KnowledgeBase> search(String question) {
+    public List<SearchResult> search(String question) {
         // 1. Convert the question into a vector.
         List<Double> questionVector = embeddingService.getEmbedding(question);
 
         // 2. Get all chunks from the database.
         List<KnowledgeBase> allChunks = repository.findAll();
 
-        // 3. Calculate similarity, sort from highest to lowest, and return the top 3.
+        // 3. Sort by similarity (high to low), take top 3, and convert to clean SearchResult (no embedding).
         return allChunks.stream()
                 .filter(chunk -> chunk.getEmbedding() != null && !chunk.getEmbedding().isEmpty())
                 .sorted(Comparator.comparingDouble(
                         (KnowledgeBase chunk) -> cosineSimilarity(questionVector, stringToVector(chunk.getEmbedding()))
                 ).reversed())
                 .limit(3)
+                .map(SearchResult::new)
                 .toList();
     }
 

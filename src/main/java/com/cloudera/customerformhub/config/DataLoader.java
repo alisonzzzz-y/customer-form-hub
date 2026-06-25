@@ -2,19 +2,23 @@ package com.cloudera.customerformhub.config;
 
 import com.cloudera.customerformhub.entity.KnowledgeBase;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
+import com.cloudera.customerformhub.service.EmbeddingService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Component
 public class DataLoader implements CommandLineRunner {
 
     private final KnowledgeBaseRepository repository;
+    private final EmbeddingService embeddingService;
 
-    public DataLoader(KnowledgeBaseRepository repository) {
+    public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService) {
         this.repository = repository;
+        this.embeddingService = embeddingService;
     }
 
     private LocalDateTime d(int year, int month, int day) {
@@ -23,6 +27,8 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
+        // 给所有 chunk 生成向量(已有向量的会自动跳过)
+        embeddingService.generateEmbeddingsForAll();
         if (repository.count() > 0) {
             return;
         }

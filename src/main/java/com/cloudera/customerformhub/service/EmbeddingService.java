@@ -15,7 +15,7 @@ public class EmbeddingService {
 
     private final RestClient restClient;
     private final KnowledgeBaseRepository repository;
-    private final ObjectMapper objectMapper = new ObjectMapper();  // 用来打包/解包向量
+    private final ObjectMapper objectMapper = new ObjectMapper();  // Used to convert vectors to and from JSON.
 
     @Value("${openai.api.key}")
     private String apiKey;
@@ -25,7 +25,7 @@ public class EmbeddingService {
         this.repository = repository;
     }
 
-    // 输入一段文字,返回它的向量(一串数字)
+    // Convert text into an embedding vector.
     public List<Double> getEmbedding(String text) {
         Map<String, Object> requestBody = Map.of(
                 "model", "text-embedding-3-small",
@@ -45,7 +45,7 @@ public class EmbeddingService {
         return embedding;
     }
 
-    // 把一串数字向量"打包"成一段文字(JSON 字符串),方便存进数据库
+    // Convert a vector to a JSON string for database storage.
     public String vectorToString(List<Double> vector) {
         try {
             return objectMapper.writeValueAsString(vector);
@@ -54,24 +54,24 @@ public class EmbeddingService {
         }
     }
 
-    // 给所有还没有向量的 chunk 生成向量并存进数据库
+    // Generate and save embeddings for chunks without one.
     public void generateEmbeddingsForAll() {
         List<KnowledgeBase> all = repository.findAll();
         int count = 0;
 
         for (KnowledgeBase chunk : all) {
-            // 如果这条已经有向量了,跳过(避免重复花钱)
+            // Skip chunks that already have an embedding.
             if (chunk.getEmbedding() != null && !chunk.getEmbedding().isEmpty()) {
                 continue;
             }
 
-            // 1. 把这条的文字发给 OpenAI,拿回向量
+            // 1. Send the chunk text to OpenAI and get the embedding.
             List<Double> vector = getEmbedding(chunk.getContent());
 
-            // 2. 打包成文字,存进 embedding 字段
+            // 2. Convert it to JSON and store it in the embedding field.
             chunk.setEmbedding(vectorToString(vector));
 
-            // 3. 存回数据库
+            // 3. Save the chunk to the database.
             repository.save(chunk);
             count++;
             System.out.println(">>> Generated embedding for chunk id " + chunk.getId());

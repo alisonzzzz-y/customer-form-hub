@@ -7,7 +7,7 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class AppConfig {
 
-    // 准备一个 RestClient,供其他类用来发 HTTP 请求
+    // prepare a RestClient for http requests
     @Bean
     public RestClient restClient() {
         return RestClient.create();

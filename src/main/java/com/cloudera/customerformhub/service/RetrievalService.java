@@ -32,6 +32,7 @@ public class RetrievalService {
 
         // 3. Sort by similarity (high to low), take top 3, and convert to clean SearchResult (no embedding).
         return allChunks.stream()
+                .filter(chunk -> Boolean.TRUE.equals(chunk.getApproved()))
                 .filter(chunk -> chunk.getEmbedding() != null && !chunk.getEmbedding().isEmpty())
                 .sorted(Comparator.comparingDouble(
                         (KnowledgeBase chunk) -> cosineSimilarity(questionVector, stringToVector(chunk.getEmbedding()))

@@ -1,7 +1,9 @@
 package com.cloudera.customerformhub.config;
 
 import com.cloudera.customerformhub.entity.KnowledgeBase;
+import com.cloudera.customerformhub.entity.Ticket;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
+import com.cloudera.customerformhub.repository.TicketRepository;
 import com.cloudera.customerformhub.service.EmbeddingService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
@@ -14,14 +16,22 @@ public class DataLoader implements CommandLineRunner {
 
     private final KnowledgeBaseRepository repository;
     private final EmbeddingService embeddingService;
+    private final TicketRepository ticketRepository;
 
-    public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService) {
+    public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService,
+                      TicketRepository ticketRepository) {
         this.repository = repository;
         this.embeddingService = embeddingService;
+        this.ticketRepository = ticketRepository;
     }
 
     private LocalDateTime d(int year, int month, int day) {
         return LocalDate.of(year, month, day).atStartOfDay();
+    }
+
+    // Same as d() but with hour and minute, for ETA / created timestamps
+    private LocalDateTime dt(int year, int month, int day, int hour, int minute) {
+        return LocalDateTime.of(year, month, day, hour, minute);
     }
 
     @Override
@@ -30,8 +40,37 @@ public class DataLoader implements CommandLineRunner {
         if (repository.count() == 0) {
             seedData();
         }
+        // Seed the tickets if the table is empty
+        if (ticketRepository.count() == 0) {
+            seedTickets();
+        }
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
+    }
+
+    private void seedTickets() {
+        // customerName, createdBy, assignedTo, status, urgency, ndaStatus, deadline, businessImpact, eta, createdAt
+        ticketRepository.save(new Ticket(
+                "Acme Corp", "—", "Unassigned", "New",
+                "Medium", "Yes", d(2025, 6, 2),
+                "New logo, evaluating platform", null, dt(2025, 5, 28, 9, 15)));
+
+        ticketRepository.save(new Ticket(
+                "Globex Inc", "Jane Smith", "Sarah", "Intake Missing",
+                "High", "Unknown", d(2025, 5, 26),
+                "Renewal, medium value", dt(2025, 5, 23, 15, 0), dt(2025, 5, 19, 9, 7)));
+
+        ticketRepository.save(new Ticket(
+                "Initech", "—", "Sarah", "In Review",
+                "Medium", "Yes", d(2025, 5, 28),
+                "Expansion opportunity", dt(2025, 5, 27, 14, 0), dt(2025, 5, 20, 11, 30)));
+
+        ticketRepository.save(new Ticket(
+                "Umbrella Co", "—", "Alex", "Waiting SME",
+                "High", "Yes", d(2025, 5, 29),
+                "Strategic account renewal", dt(2025, 5, 29, 12, 0), dt(2025, 5, 21, 16, 45)));
+
+        System.out.println(">>> DataLoader: inserted " + ticketRepository.count() + " tickets.");
     }
 
     private void seedData() {

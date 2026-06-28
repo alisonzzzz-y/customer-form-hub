@@ -23,7 +23,8 @@ public class RetrievalService {
     }
 
     // A small helper that pairs a chunk with its similarity score.
-    private record ScoredChunk(KnowledgeBase chunk, double score) {}
+    private record ScoredChunk(KnowledgeBase chunk, double score) {
+    }
 
     // Search for the top 3 most relevant chunks for a question.
     public List<SearchResult> search(String question) {
@@ -56,7 +57,8 @@ public class RetrievalService {
     // Convert the stored JSON text back into a vector.
     private List<Double> stringToVector(String text) {
         try {
-            return objectMapper.readValue(text, new TypeReference<List<Double>>() {});
+            return objectMapper.readValue(text, new TypeReference<List<Double>>() {
+            });
         } catch (Exception e) {
             throw new RuntimeException("Failed to parse embedding", e);
         }
@@ -64,6 +66,11 @@ public class RetrievalService {
 
     // Calculate cosine similarity between two vectors.
     private double cosineSimilarity(List<Double> a, List<Double> b) {
+        // Guard: null or length mismatch means we can't compare → treat as no similarity
+        if (a == null || b == null || a.size() != b.size()) {
+            return 0.0;
+        }
+
         double dotProduct = 0.0;
         double normA = 0.0;
         double normB = 0.0;
@@ -72,6 +79,13 @@ public class RetrievalService {
             normA += a.get(i) * a.get(i);
             normB += b.get(i) * b.get(i);
         }
-        return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+
+        // Guard: a zero-length vector would divide by zero → return 0 instead of NaN
+        double denominator = Math.sqrt(normA) * Math.sqrt(normB);
+        if (denominator == 0.0) {
+            return 0.0;
+        }
+
+        return dotProduct / denominator;
     }
 }

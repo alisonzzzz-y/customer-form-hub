@@ -22,6 +22,9 @@ public class RetrievalService {
         this.repository = repository;
     }
 
+    // A small helper that pairs a chunk with its similarity score.
+    private record ScoredChunk(KnowledgeBase chunk, double score) {}
+
     // Search for the top 3 most relevant chunks for a question.
     public List<SearchResult> search(String question) {
         // 1. Convert the question into a vector.
@@ -30,15 +33,23 @@ public class RetrievalService {
         // 2. Get all chunks from the database.
         List<KnowledgeBase> allChunks = repository.findAll();
 
-        // 3. Sort by similarity (high to low), take top 3, and convert to clean SearchResult (no embedding).
+        // 3. For each valid chunk, compute its similarity ONCE and keep it with the chunk.
         return allChunks.stream()
                 .filter(chunk -> Boolean.TRUE.equals(chunk.getApproved()))
                 .filter(chunk -> chunk.getEmbedding() != null && !chunk.getEmbedding().isEmpty())
-                .sorted(Comparator.comparingDouble(
-                        (KnowledgeBase chunk) -> cosineSimilarity(questionVector, stringToVector(chunk.getEmbedding()))
-                ).reversed())
+                .map(chunk -> new ScoredChunk(
+                        chunk,
+                        cosineSimilarity(questionVector, stringToVector(chunk.getEmbedding()))
+                ))
+                // 4. Sort by the precomputed score (high to low) and take the top 3.
+                .sorted(Comparator.comparingDouble(ScoredChunk::score).reversed())
                 .limit(3)
-                .map(SearchResult::new)
+                // 5. Convert to SearchResult and attach the score.
+                .map(scored -> {
+                    SearchResult result = new SearchResult(scored.chunk());
+                    result.setSimilarityScore(scored.score());
+                    return result;
+                })
                 .toList();
     }
 

@@ -16,6 +16,7 @@ public class SearchResult {
     private String sharingStatus;
     private String department;
     private Boolean approved;
+    private Double similarityScore; // cosine similarity to the question (0 to 1)
 
     // Build a SearchResult from a KnowledgeBase entity (embedding is left out)
     public SearchResult(KnowledgeBase chunk) {
@@ -65,5 +66,14 @@ public class SearchResult {
 
     public Boolean getApproved() {
         return approved;
+    }
+
+    public Double getSimilarityScore() {
+        return similarityScore;
+    }
+
+    // Setter so the retrieval service can fill in the score after construction
+    public void setSimilarityScore(Double similarityScore) {
+        this.similarityScore = similarityScore;
     }
 }

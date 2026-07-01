@@ -1,5 +1,7 @@
 package com.cloudera.customerformhub.config;
 
+import com.cloudera.customerformhub.entity.SmeRequest;
+import com.cloudera.customerformhub.repository.SmeRequestRepository;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
 import com.cloudera.customerformhub.entity.Ticket;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
@@ -17,12 +19,14 @@ public class DataLoader implements CommandLineRunner {
     private final KnowledgeBaseRepository repository;
     private final EmbeddingService embeddingService;
     private final TicketRepository ticketRepository;
+    private final SmeRequestRepository smeRequestRepository;
 
     public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService,
-                      TicketRepository ticketRepository) {
+                      TicketRepository ticketRepository, SmeRequestRepository smeRequestRepository) {
         this.repository = repository;
         this.embeddingService = embeddingService;
         this.ticketRepository = ticketRepository;
+        this.smeRequestRepository = smeRequestRepository;
     }
 
     private LocalDateTime d(int year, int month, int day) {
@@ -40,9 +44,9 @@ public class DataLoader implements CommandLineRunner {
         if (repository.count() == 0) {
             seedData();
         }
-        // Seed the tickets if the table is empty
-        if (ticketRepository.count() == 0) {
-            seedTickets();
+        // Seed the SME requests if the table is empty
+        if (smeRequestRepository.count() == 0) {
+            seedSmeRequests();
         }
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
@@ -71,6 +75,40 @@ public class DataLoader implements CommandLineRunner {
                 "Strategic account renewal", dt(2025, 5, 29, 12, 0), dt(2025, 5, 21, 16, 45)));
 
         System.out.println(">>> DataLoader: inserted " + ticketRepository.count() + " tickets.");
+    }
+
+    private void seedSmeRequests() {
+        // These SME requests belong to the Globex Inc ticket (ticketId = 2).
+        // ticketId, department, teamName, questionCount, eta, status, confirmedBy, sentAt, returnedAt
+
+        Long globexTicketId = 2L;
+
+        smeRequestRepository.save(new SmeRequest(
+                globexTicketId, "InfoSec", "InfoSec Team", 12,
+                dt(2025, 5, 23, 15, 0), "ETA Confirmed", "Confirmed via email by Alex",
+                dt(2025, 5, 20, 10, 0), null));
+
+        smeRequestRepository.save(new SmeRequest(
+                globexTicketId, "Legal", "Legal Team", 5,
+                null, "Waiting for ETA", null,
+                dt(2025, 5, 20, 10, 0), null));
+
+        smeRequestRepository.save(new SmeRequest(
+                globexTicketId, "HR", "HR Ops", 8,
+                dt(2025, 5, 22, 17, 0), "ETA Confirmed", "Confirmed by HR lead",
+                dt(2025, 5, 20, 10, 0), null));
+
+        smeRequestRepository.save(new SmeRequest(
+                globexTicketId, "Finance", "Finance Team", 6,
+                dt(2025, 5, 21, 14, 0), "In Progress", null,
+                dt(2025, 5, 20, 10, 0), null));
+
+        smeRequestRepository.save(new SmeRequest(
+                globexTicketId, "ESG", "ESG Team", 5,
+                dt(2025, 5, 21, 12, 0), "In Progress", null,
+                dt(2025, 5, 20, 10, 0), null));
+
+        System.out.println(">>> DataLoader: inserted " + smeRequestRepository.count() + " SME requests.");
     }
 
     private void seedData() {

@@ -34,4 +34,14 @@ public class TicketService {
     public void deleteTicket(Long id) {
         repository.deleteById(id);
     }
+
+    // Update only the status of a ticket (returns null if not found)
+    public Ticket updateStatus(Long id, String status) {
+        Ticket ticket = repository.findById(id).orElse(null);
+        if (ticket == null) {
+            return null;
+        }
+        ticket.setStatus(status);
+        return repository.save(ticket);
+    }
 }

@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/tickets")
@@ -59,5 +60,19 @@ public class TicketController {
         }
         ticketService.deleteTicket(id);
         return ResponseEntity.noContent().build();
+    }
+
+    // PATCH /api/tickets/{id}/status  → update only the status
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<Ticket> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String status = body.get("status");
+        if (status == null || status.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        Ticket updated = ticketService.updateStatus(id, status);
+        if (updated == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(updated);
     }
 }

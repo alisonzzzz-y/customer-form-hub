@@ -65,7 +65,7 @@ public class RetrievalService {
     }
 
     // Calculate cosine similarity between two vectors.
-    private double cosineSimilarity(List<Double> a, List<Double> b) {
+    double cosineSimilarity(List<Double> a, List<Double> b) {
         // Guard: null or length mismatch means we can't compare → treat as no similarity
         if (a == null || b == null || a.size() != b.size()) {
             return 0.0;

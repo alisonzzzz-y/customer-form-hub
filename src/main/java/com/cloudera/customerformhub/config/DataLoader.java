@@ -1,5 +1,7 @@
 package com.cloudera.customerformhub.config;
 
+import com.cloudera.customerformhub.entity.FormQuestion;
+import com.cloudera.customerformhub.repository.FormQuestionRepository;
 import com.cloudera.customerformhub.entity.SmeRequest;
 import com.cloudera.customerformhub.repository.SmeRequestRepository;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
@@ -20,13 +22,16 @@ public class DataLoader implements CommandLineRunner {
     private final EmbeddingService embeddingService;
     private final TicketRepository ticketRepository;
     private final SmeRequestRepository smeRequestRepository;
+    private final FormQuestionRepository formQuestionRepository;
 
     public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService,
-                      TicketRepository ticketRepository, SmeRequestRepository smeRequestRepository) {
+                      TicketRepository ticketRepository, SmeRequestRepository smeRequestRepository,
+                      FormQuestionRepository formQuestionRepository) {
         this.repository = repository;
         this.embeddingService = embeddingService;
         this.ticketRepository = ticketRepository;
         this.smeRequestRepository = smeRequestRepository;
+        this.formQuestionRepository = formQuestionRepository;
     }
 
     private LocalDateTime d(int year, int month, int day) {
@@ -47,6 +52,10 @@ public class DataLoader implements CommandLineRunner {
         // Seed the SME requests if the table is empty
         if (smeRequestRepository.count() == 0) {
             seedSmeRequests();
+        }
+        // Seed the form questions if the table is empty
+        if (formQuestionRepository.count() == 0) {
+            seedFormQuestions();
         }
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
@@ -109,6 +118,57 @@ public class DataLoader implements CommandLineRunner {
                 dt(2025, 5, 20, 10, 0), null));
 
         System.out.println(">>> DataLoader: inserted " + smeRequestRepository.count() + " SME requests.");
+    }
+
+    private void seedFormQuestions() {
+        // These questions belong to the Globex Inc ticket (ticketId = 2).
+        // ticketId, questionText, department, status, riskLevel, rowReference
+
+        Long globexTicketId = 2L;
+
+        // InfoSec
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Do you have a SOC 2 Type II report?", "InfoSec", "Source Found", "Medium", "Q1"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Describe data encryption in transit.", "InfoSec", "Needs Review", "Medium", "Q2"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "What is your vulnerability disclosure policy?", "InfoSec", "Source Found", "Medium", "Q3"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Do you perform annual penetration testing?", "InfoSec", "Needs Review", "Medium", "Q4"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "What MFA mechanisms are supported?", "InfoSec", "Source Found", "Low", "Q5"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "How are privileged accounts managed?", "InfoSec", "SME Needed", "High", "Q6"));
+
+        // Legal
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Do you have anti-bribery policies?", "Legal", "Source Found", "Medium", "Q7"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Where is customer data subject to jurisdiction?", "Legal", "SME Needed", "High", "Q8"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Do you have a data processing agreement template?", "Legal", "Needs Review", "Medium", "Q9"));
+
+        // HR
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "What is your employee turnover rate?", "HR", "SME Needed", "Low", "Q10"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Do you conduct background checks on all staff?", "HR", "Needs Review", "Medium", "Q11"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "What security training do employees receive?", "HR", "Source Found", "Low", "Q12"));
+
+        // Finance
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Are your financials audited by a third party?", "Finance", "Source Found", "Medium", "Q13"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Do you maintain cyber insurance?", "Finance", "SME Needed", "Medium", "Q14"));
+
+        // ESG
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "What is your carbon neutrality target?", "ESG", "SME Needed", "Low", "Q15"));
+        formQuestionRepository.save(new FormQuestion(globexTicketId,
+                "Do you publish an annual sustainability report?", "ESG", "Needs Review", "Low", "Q16"));
+
+        System.out.println(">>> DataLoader: inserted " + formQuestionRepository.count() + " form questions.");
     }
 
     private void seedData() {

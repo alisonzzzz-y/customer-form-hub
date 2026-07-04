@@ -45,30 +45,35 @@ public class DataLoader implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        // Seed the chunks if the table is empty
+        // Seed the knowledge base chunks if the table is empty
         if (repository.count() == 0) {
             seedData();
         }
-        // Seed the SME requests if the table is empty
-        if (smeRequestRepository.count() == 0) {
-            seedSmeRequests();
+
+        // Seed tickets first; the other seeds depend on the Globex ticket's real id
+        if (ticketRepository.count() == 0) {
+            Long globexTicketId = seedTickets();
+
+            if (smeRequestRepository.count() == 0) {
+                seedSmeRequests(globexTicketId);
+            }
+            if (formQuestionRepository.count() == 0) {
+                seedFormQuestions(globexTicketId);
+            }
         }
-        // Seed the form questions if the table is empty
-        if (formQuestionRepository.count() == 0) {
-            seedFormQuestions();
-        }
+
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
     }
 
-    private void seedTickets() {
+    private Long seedTickets() {
         // customerName, createdBy, assignedTo, status, urgency, ndaStatus, deadline, businessImpact, eta, createdAt
         ticketRepository.save(new Ticket(
                 "Acme Corp", "—", "Unassigned", "New",
                 "Medium", "Yes", d(2025, 6, 2),
                 "New logo, evaluating platform", null, dt(2025, 5, 28, 9, 15)));
 
-        ticketRepository.save(new Ticket(
+        Ticket globex = ticketRepository.save(new Ticket(
                 "Globex Inc", "Jane Smith", "Sarah", "Intake Missing",
                 "High", "Unknown", d(2025, 5, 26),
                 "Renewal, medium value", dt(2025, 5, 23, 15, 0), dt(2025, 5, 19, 9, 7)));
@@ -84,13 +89,13 @@ public class DataLoader implements CommandLineRunner {
                 "Strategic account renewal", dt(2025, 5, 29, 12, 0), dt(2025, 5, 21, 16, 45)));
 
         System.out.println(">>> DataLoader: inserted " + ticketRepository.count() + " tickets.");
+
+        // Return the real, database-generated id of the Globex ticket
+        return globex.getId();
     }
 
-    private void seedSmeRequests() {
-        // These SME requests belong to the Globex Inc ticket (ticketId = 2).
-        // ticketId, department, teamName, questionCount, eta, status, confirmedBy, sentAt, returnedAt
-
-        Long globexTicketId = 2L;
+    private void seedSmeRequests(Long globexTicketId) {
+        // These SME requests belong to the Globex Inc ticket.
 
         smeRequestRepository.save(new SmeRequest(
                 globexTicketId, "InfoSec", "InfoSec Team", 12,
@@ -120,12 +125,7 @@ public class DataLoader implements CommandLineRunner {
         System.out.println(">>> DataLoader: inserted " + smeRequestRepository.count() + " SME requests.");
     }
 
-    private void seedFormQuestions() {
-        // These questions belong to the Globex Inc ticket (ticketId = 2).
-        // ticketId, questionText, department, status, riskLevel, rowReference
-
-        Long globexTicketId = 2L;
-
+    private void seedFormQuestions(Long globexTicketId) {
         // InfoSec
         formQuestionRepository.save(new FormQuestion(globexTicketId,
                 "Do you have a SOC 2 Type II report?", "InfoSec", "Source Found", "Medium", "Q1"));

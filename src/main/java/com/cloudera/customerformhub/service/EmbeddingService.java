@@ -55,28 +55,30 @@ public class EmbeddingService {
     }
 
     // Generate and save embeddings for chunks without one.
+// A failure on one chunk is logged and skipped, so a temporary
+// OpenAI outage can never prevent the application from starting.
     public void generateEmbeddingsForAll() {
         List<KnowledgeBase> all = repository.findAll();
-        int count = 0;
+        int success = 0;
+        int failed = 0;
 
         for (KnowledgeBase chunk : all) {
             // Skip chunks that already have an embedding.
             if (chunk.getEmbedding() != null && !chunk.getEmbedding().isEmpty()) {
                 continue;
             }
-
-            // 1. Send the chunk text to OpenAI and get the embedding.
-            List<Double> vector = getEmbedding(chunk.getContent());
-
-            // 2. Convert it to JSON and store it in the embedding field.
-            chunk.setEmbedding(vectorToString(vector));
-
-            // 3. Save the chunk to the database.
-            repository.save(chunk);
-            count++;
-            System.out.println(">>> Generated embedding for chunk id " + chunk.getId());
+            try {
+                List<Double> vector = getEmbedding(chunk.getContent());
+                chunk.setEmbedding(vectorToString(vector));
+                repository.save(chunk);
+                success++;
+                System.out.println(">>> Generated embedding for chunk id " + chunk.getId());
+            } catch (Exception e) {
+                failed++;
+                System.err.println(">>> Embedding FAILED for chunk id " + chunk.getId()
+                        + ": " + e.getMessage());
+            }
         }
 
-        System.out.println(">>> Done. Generated embeddings for " + count + " chunks.");
-    }
-}
+        System.out.println(">>> Done. Embeddings generated: " + success + ", failed: " + failed);
+    }}

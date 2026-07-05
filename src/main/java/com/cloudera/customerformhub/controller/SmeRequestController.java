@@ -48,12 +48,11 @@ public class SmeRequestController {
     // PUT /api/sme-requests/{id}  → update (e.g. record ETA, mark returned)
     @PutMapping("/{id}")
     public ResponseEntity<SmeRequest> updateSmeRequest(@PathVariable Long id, @RequestBody SmeRequest smeRequest) {
-        SmeRequest existing = smeRequestService.getSmeRequestById(id);
-        if (existing == null) {
+        SmeRequest updated = smeRequestService.updateSmeRequest(id, smeRequest);
+        if (updated == null) {
             return ResponseEntity.notFound().build();
         }
-        smeRequest.setId(id);
-        return ResponseEntity.ok(smeRequestService.saveSmeRequest(smeRequest));
+        return ResponseEntity.ok(updated);
     }
 
     // DELETE /api/sme-requests/{id}  → delete

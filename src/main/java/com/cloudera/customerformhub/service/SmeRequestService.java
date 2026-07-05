@@ -40,6 +40,23 @@ public class SmeRequestService {
         return repository.save(smeRequest);
     }
 
+    // Partial update: only non-null fields are copied onto the existing row
+    public SmeRequest updateSmeRequest(Long id, SmeRequest changes) {
+        SmeRequest existing = repository.findById(id).orElse(null);
+        if (existing == null) {
+            return null;
+        }
+        if (changes.getDepartment() != null) existing.setDepartment(changes.getDepartment());
+        if (changes.getTeamName() != null) existing.setTeamName(changes.getTeamName());
+        if (changes.getQuestionCount() != null) existing.setQuestionCount(changes.getQuestionCount());
+        if (changes.getEta() != null) existing.setEta(changes.getEta());
+        if (changes.getStatus() != null) existing.setStatus(changes.getStatus());
+        if (changes.getConfirmedBy() != null) existing.setConfirmedBy(changes.getConfirmedBy());
+        if (changes.getReturnedAt() != null) existing.setReturnedAt(changes.getReturnedAt());
+        // ticketId and sentAt are intentionally never overwritten
+        return repository.save(existing);
+    }
+
     // Delete
     public void deleteSmeRequest(Long id) {
         repository.deleteById(id);

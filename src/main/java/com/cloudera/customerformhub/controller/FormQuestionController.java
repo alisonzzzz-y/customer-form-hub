@@ -56,12 +56,11 @@ public class FormQuestionController {
     // PUT /api/questions/{id}  → update a question
     @PutMapping("/{id}")
     public ResponseEntity<FormQuestion> update(@PathVariable Long id, @RequestBody FormQuestion question) {
-        FormQuestion existing = questionService.getQuestionById(id);
-        if (existing == null) {
+        FormQuestion updated = questionService.updateQuestion(id, question);
+        if (updated == null) {
             return ResponseEntity.notFound().build();
         }
-        question.setId(id);
-        return ResponseEntity.ok(questionService.saveQuestion(question));
+        return ResponseEntity.ok(updated);
     }
 
     // PATCH /api/questions/{id}/status  → update only the status

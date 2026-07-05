@@ -50,6 +50,21 @@ public class FormQuestionService {
         return repository.save(question);
     }
 
+    // Partial update: only non-null fields are copied onto the existing row
+    public FormQuestion updateQuestion(Long id, FormQuestion changes) {
+        FormQuestion existing = repository.findById(id).orElse(null);
+        if (existing == null) {
+            return null;
+        }
+        if (changes.getQuestionText() != null) existing.setQuestionText(changes.getQuestionText());
+        if (changes.getDepartment() != null) existing.setDepartment(changes.getDepartment());
+        if (changes.getStatus() != null) existing.setStatus(changes.getStatus());
+        if (changes.getRiskLevel() != null) existing.setRiskLevel(changes.getRiskLevel());
+        if (changes.getRowReference() != null) existing.setRowReference(changes.getRowReference());
+        // ticketId and createdAt are intentionally never overwritten
+        return repository.save(existing);
+    }
+
     // Delete a question by id
     public void deleteQuestion(Long id) {
         repository.deleteById(id);

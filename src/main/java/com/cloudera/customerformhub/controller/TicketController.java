@@ -43,12 +43,11 @@ public class TicketController {
     // PUT /api/tickets/{id}  → update a ticket
     @PutMapping("/{id}")
     public ResponseEntity<Ticket> updateTicket(@PathVariable Long id, @RequestBody Ticket ticket) {
-        Ticket existing = ticketService.getTicketById(id);
-        if (existing == null) {
+        Ticket updated = ticketService.updateTicket(id, ticket);
+        if (updated == null) {
             return ResponseEntity.notFound().build();
         }
-        ticket.setId(id); // make sure we update the right row
-        return ResponseEntity.ok(ticketService.saveTicket(ticket));
+        return ResponseEntity.ok(updated);
     }
 
     // DELETE /api/tickets/{id}  → delete a ticket

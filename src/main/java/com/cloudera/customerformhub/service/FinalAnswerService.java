@@ -41,12 +41,12 @@ public class FinalAnswerService {
         if (!existing.isEmpty()) {
             // Update the existing answer for this question
             FinalAnswer current = existing.get(0);
-            current.setAnswerText(answer.getAnswerText());
-            current.setSourceChunkId(answer.getSourceChunkId());
-            current.setIsEdited(answer.getIsEdited());
-            current.setSourceType(answer.getSourceType());
-            current.setApprovalStatus(answer.getApprovalStatus());
-            current.setApprovedBy(answer.getApprovedBy());
+            if (answer.getAnswerText() != null) current.setAnswerText(answer.getAnswerText());
+            if (answer.getSourceChunkId() != null) current.setSourceChunkId(answer.getSourceChunkId());
+            if (answer.getIsEdited() != null) current.setIsEdited(answer.getIsEdited());
+            if (answer.getSourceType() != null) current.setSourceType(answer.getSourceType());
+            if (answer.getApprovalStatus() != null) current.setApprovalStatus(answer.getApprovalStatus());
+            if (answer.getApprovedBy() != null) current.setApprovedBy(answer.getApprovedBy());
             return repository.save(current);
         }
         // No answer yet for this question → create a new one

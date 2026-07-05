@@ -1,5 +1,7 @@
 package com.cloudera.customerformhub.dto;
 
+import java.time.LocalDateTime;
+
 public class QuestionWithAnswer {
 
     // Question fields
@@ -15,6 +17,9 @@ public class QuestionWithAnswer {
     private Boolean isEdited;
     private String sourceType;
     private String approvedBy;
+    private String approvalStatus;        // Draft / Confirmed
+    private Long sourceChunkId;           // traceability: which KB chunk it came from
+    private LocalDateTime answerUpdatedAt; // freshness: when the answer was last updated
     private boolean answered;         // convenience flag: does this question have a final answer?
 
     // Getters and setters
@@ -47,6 +52,15 @@ public class QuestionWithAnswer {
 
     public String getApprovedBy() { return approvedBy; }
     public void setApprovedBy(String approvedBy) { this.approvedBy = approvedBy; }
+
+    public String getApprovalStatus() { return approvalStatus; }
+    public void setApprovalStatus(String approvalStatus) { this.approvalStatus = approvalStatus; }
+
+    public Long getSourceChunkId() { return sourceChunkId; }
+    public void setSourceChunkId(Long sourceChunkId) { this.sourceChunkId = sourceChunkId; }
+
+    public LocalDateTime getAnswerUpdatedAt() { return answerUpdatedAt; }
+    public void setAnswerUpdatedAt(LocalDateTime answerUpdatedAt) { this.answerUpdatedAt = answerUpdatedAt; }
 
     public boolean isAnswered() { return answered; }
     public void setAnswered(boolean answered) { this.answered = answered; }

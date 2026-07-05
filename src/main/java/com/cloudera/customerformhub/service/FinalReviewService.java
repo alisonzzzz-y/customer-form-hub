@@ -50,6 +50,9 @@ public class FinalReviewService {
             dto.setIsEdited(a.getIsEdited());
             dto.setSourceType(a.getSourceType());
             dto.setApprovedBy(a.getApprovedBy());
+            dto.setApprovalStatus(a.getApprovalStatus());
+            dto.setSourceChunkId(a.getSourceChunkId());
+            dto.setAnswerUpdatedAt(a.getUpdatedAt());
             dto.setAnswered(true);
         } else {
             dto.setAnswered(false);

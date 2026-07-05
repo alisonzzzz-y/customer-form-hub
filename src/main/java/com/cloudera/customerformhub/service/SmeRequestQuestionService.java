@@ -7,6 +7,8 @@ import com.cloudera.customerformhub.repository.SmeRequestQuestionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class SmeRequestQuestionService {
@@ -57,15 +59,22 @@ public class SmeRequestQuestionService {
     }
 
     // Package all "SME Needed" questions of a ticket+department into an SME request.
-    // Returns the list of created SmeRequestQuestion records.
+    // Idempotent: questions already linked to this request are skipped, so calling
+    // this twice (e.g. a double-click) can never create duplicates.
     public List<SmeRequestQuestion> packageQuestions(Long smeRequestId, Long ticketId, String department) {
-        // 1. Find this ticket's questions in this department that need SME input
+        // 1. Which questions are already in this SME request?
+        Set<Long> alreadyLinked = repository.findBySmeRequestId(smeRequestId).stream()
+                .map(SmeRequestQuestion::getQuestionId)
+                .collect(Collectors.toSet());
+
+        // 2. Find this ticket's questions in this department that need SME input
         List<FormQuestion> deptQuestions =
                 formQuestionRepository.findByTicketIdAndDepartment(ticketId, department);
 
-        // 2. For each question that needs SME, create a link record
+        // 3. Create a link record only for questions not linked yet
         return deptQuestions.stream()
                 .filter(q -> "SME Needed".equals(q.getStatus()))
+                .filter(q -> !alreadyLinked.contains(q.getId()))
                 .map(q -> {
                     SmeRequestQuestion link = new SmeRequestQuestion(
                             smeRequestId, q.getId(), "Pending",

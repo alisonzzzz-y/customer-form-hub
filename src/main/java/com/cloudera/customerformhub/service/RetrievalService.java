@@ -16,6 +16,7 @@ public class RetrievalService {
     private final EmbeddingService embeddingService;
     private final KnowledgeBaseRepository repository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final double SIMILARITY_THRESHOLD = 0.35;
 
     public RetrievalService(EmbeddingService embeddingService, KnowledgeBaseRepository repository) {
         this.embeddingService = embeddingService;
@@ -42,10 +43,10 @@ public class RetrievalService {
                         chunk,
                         cosineSimilarity(questionVector, stringToVector(chunk.getEmbedding()))
                 ))
-                // 4. Sort by the precomputed score (high to low) and take the top 3.
+                // Drop chunks below the similarity threshold (irrelevant noise)
+                .filter(scored -> scored.score() >= SIMILARITY_THRESHOLD)
                 .sorted(Comparator.comparingDouble(ScoredChunk::score).reversed())
                 .limit(3)
-                // 5. Convert to SearchResult and attach the score.
                 .map(scored -> {
                     SearchResult result = new SearchResult(scored.chunk());
                     result.setSimilarityScore(scored.score());

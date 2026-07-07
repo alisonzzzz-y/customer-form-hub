@@ -45,6 +45,12 @@ public class SmeRequestController {
         return smeRequestService.saveSmeRequest(smeRequest);
     }
 
+    // POST /api/sme-requests/dispatch/ticket/{ticketId}  → create or reuse department SME requests
+    @PostMapping("/dispatch/ticket/{ticketId}")
+    public List<SmeRequest> dispatchForTicket(@PathVariable Long ticketId) {
+        return smeRequestService.dispatchForTicket(ticketId);
+    }
+
     // PUT /api/sme-requests/{id}  → update (e.g. record ETA, mark returned)
     @PutMapping("/{id}")
     public ResponseEntity<SmeRequest> updateSmeRequest(@PathVariable Long id, @RequestBody SmeRequest smeRequest) {

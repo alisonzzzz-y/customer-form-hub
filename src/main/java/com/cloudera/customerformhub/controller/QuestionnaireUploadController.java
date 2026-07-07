@@ -1,6 +1,7 @@
 package com.cloudera.customerformhub.controller;
 
 import com.cloudera.customerformhub.dto.ClassifiedQuestion;
+import com.cloudera.customerformhub.service.DocxParserService;
 import com.cloudera.customerformhub.service.QuestionnaireParserService;
 import com.cloudera.customerformhub.service.QuestionnaireParserService.ParsedQuestion;
 import com.cloudera.customerformhub.service.QuestionClassifierService;
@@ -17,13 +18,16 @@ import java.util.List;
 public class QuestionnaireUploadController {
 
     private final QuestionnaireParserService parserService;
+    private final DocxParserService docxParserService;
     private final QuestionClassifierService classifierService;
     private final FormQuestionService formQuestionService;
 
     public QuestionnaireUploadController(QuestionnaireParserService parserService,
+                                         DocxParserService docxParserService,
                                          QuestionClassifierService classifierService,
                                          FormQuestionService formQuestionService) {
         this.parserService = parserService;
+        this.docxParserService = docxParserService;
         this.classifierService = classifierService;
         this.formQuestionService = formQuestionService;
     }
@@ -31,14 +35,14 @@ public class QuestionnaireUploadController {
     // POST /api/questionnaire/parse  → upload only, parse, no classification
     @PostMapping("/parse")
     public List<ParsedQuestion> parse(@RequestParam("file") MultipartFile file) {
-        return parserService.parse(file);
+        return parseAny(file);
     }
 
     // POST /api/questionnaire/classify  → upload, parse, then classify each question by department
     @PostMapping("/classify")
     public List<ClassifiedQuestion> classify(@RequestParam("file") MultipartFile file) {
         // 1. Parse the questions out of the Excel
-        List<ParsedQuestion> parsed = parserService.parse(file);
+        List<ParsedQuestion> parsed = parseAny(file);
 
         // 2. Pull just the question texts into a list for the classifier
         List<String> questionTexts = new ArrayList<>();
@@ -65,7 +69,7 @@ public class QuestionnaireUploadController {
     public List<FormQuestion> importQuestions(@RequestParam("file") MultipartFile file,
                                               @RequestParam("ticketId") Long ticketId) {
         // 1. Parse the questions out of the Excel
-        List<ParsedQuestion> parsed = parserService.parse(file);
+        List<ParsedQuestion> parsed = parseAny(file);
 
         // 2. Classify all questions in one LLM call
         List<String> questionTexts = new ArrayList<>();
@@ -92,5 +96,22 @@ public class QuestionnaireUploadController {
         }
 
         return saved;
+    }
+
+    // Parse either Excel or Word questionnaire files into the same ParsedQuestion shape.
+    private List<ParsedQuestion> parseAny(MultipartFile file) {
+        String filename = file.getOriginalFilename();
+        String lowerName = filename == null ? "" : filename.toLowerCase();
+
+        if (lowerName.endsWith(".docx")) {
+            String rawText = docxParserService.extractText(file);
+            return classifierService.extractQuestions(rawText);
+        }
+
+        if (lowerName.endsWith(".xlsx")) {
+            return parserService.parse(file);
+        }
+
+        throw new IllegalArgumentException("Unsupported file type: please upload .xlsx or .docx");
     }
 }

@@ -1,7 +1,9 @@
 package com.cloudera.customerformhub.controller;
 
+import com.cloudera.customerformhub.dto.SearchResult;
 import com.cloudera.customerformhub.entity.FormQuestion;
 import com.cloudera.customerformhub.service.FormQuestionService;
+import com.cloudera.customerformhub.service.RetrievalService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,9 +15,11 @@ import java.util.Map;
 public class FormQuestionController {
 
     private final FormQuestionService questionService;
+    private final RetrievalService retrievalService;
 
-    public FormQuestionController(FormQuestionService questionService) {
+    public FormQuestionController(FormQuestionService questionService, RetrievalService retrievalService) {
         this.questionService = questionService;
+        this.retrievalService = retrievalService;
     }
 
     // GET /api/questions  → all questions
@@ -45,6 +49,17 @@ public class FormQuestionController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(question);
+    }
+
+    // GET /api/questions/{id}/suggestions  → suggested knowledge base chunks for one question
+    @GetMapping("/{id}/suggestions")
+    public ResponseEntity<List<SearchResult>> getSuggestions(@PathVariable Long id) {
+        FormQuestion question = questionService.getQuestionById(id);
+        if (question == null) {
+            return ResponseEntity.notFound().build();
+        }
+        List<SearchResult> suggestions = retrievalService.search(question.getQuestionText());
+        return ResponseEntity.ok(suggestions);
     }
 
     // POST /api/questions  → create a question

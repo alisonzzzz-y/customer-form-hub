@@ -1,7 +1,9 @@
 package com.cloudera.customerformhub.service;
 
+import com.cloudera.customerformhub.entity.FormQuestion;
 import com.cloudera.customerformhub.entity.FinalAnswer;
 import com.cloudera.customerformhub.repository.FinalAnswerRepository;
+import com.cloudera.customerformhub.repository.FormQuestionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -10,9 +12,11 @@ import java.util.List;
 public class FinalAnswerService {
 
     private final FinalAnswerRepository repository;
+    private final FormQuestionRepository questionRepository;
 
-    public FinalAnswerService(FinalAnswerRepository repository) {
+    public FinalAnswerService(FinalAnswerRepository repository, FormQuestionRepository questionRepository) {
         this.repository = repository;
+        this.questionRepository = questionRepository;
     }
 
     // Get all final answers
@@ -38,6 +42,7 @@ public class FinalAnswerService {
     // If the question already has an answer, update it instead of creating a duplicate.
     public FinalAnswer saveAnswer(FinalAnswer answer) {
         List<FinalAnswer> existing = repository.findByQuestionId(answer.getQuestionId());
+        FinalAnswer saved;
         if (!existing.isEmpty()) {
             // Update the existing answer for this question
             FinalAnswer current = existing.get(0);
@@ -47,10 +52,23 @@ public class FinalAnswerService {
             if (answer.getSourceType() != null) current.setSourceType(answer.getSourceType());
             if (answer.getApprovalStatus() != null) current.setApprovalStatus(answer.getApprovalStatus());
             if (answer.getApprovedBy() != null) current.setApprovedBy(answer.getApprovedBy());
-            return repository.save(current);
+            saved = repository.save(current);
+        } else {
+            // No answer yet for this question → create a new one
+            saved = repository.save(answer);
         }
-        // No answer yet for this question → create a new one
-        return repository.save(answer);
+
+        // Keep the related question status in sync when the final answer is confirmed.
+        if ("Confirmed".equals(saved.getApprovalStatus())) {
+            questionRepository.findById(saved.getQuestionId()).ifPresent(question -> {
+                if (!"Answered".equals(question.getStatus())) {
+                    question.setStatus("Answered");
+                    questionRepository.save(question);
+                }
+            });
+        }
+
+        return saved;
     }
 
     // Delete an answer by id

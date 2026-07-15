@@ -91,15 +91,4 @@ public class FormQuestionController {
         }
         return ResponseEntity.ok(updated);
     }
-
-    // DELETE /api/questions/{id}  → delete a question
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        FormQuestion existing = questionService.getQuestionById(id);
-        if (existing == null) {
-            return ResponseEntity.notFound().build();
-        }
-        questionService.deleteQuestion(id);
-        return ResponseEntity.noContent().build();
-    }
 }

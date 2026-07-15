@@ -48,15 +48,4 @@ public class FinalAnswerController {
     public FinalAnswer save(@RequestBody FinalAnswer answer) {
         return answerService.saveAnswer(answer);
     }
-
-    // DELETE /api/final-answers/{id}  → delete an answer
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        FinalAnswer existing = answerService.getAnswerById(id);
-        if (existing == null) {
-            return ResponseEntity.notFound().build();
-        }
-        answerService.deleteAnswer(id);
-        return ResponseEntity.noContent().build();
-    }
 }

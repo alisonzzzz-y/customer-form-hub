@@ -64,9 +64,4 @@ public class FormQuestionService {
         // ticketId and createdAt are intentionally never overwritten
         return repository.save(existing);
     }
-
-    // Delete a question by id
-    public void deleteQuestion(Long id) {
-        repository.deleteById(id);
-    }
 }

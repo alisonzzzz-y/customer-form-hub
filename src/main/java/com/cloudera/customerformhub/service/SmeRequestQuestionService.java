@@ -53,11 +53,6 @@ public class SmeRequestQuestionService {
         return repository.save(item);
     }
 
-    // Delete one record
-    public void delete(Long id) {
-        repository.deleteById(id);
-    }
-
     // Package all "SME Needed" questions of a ticket+department into an SME request.
     // Idempotent: questions already linked to this request are skipped, so calling
     // this twice (e.g. a double-click) can never create duplicates.

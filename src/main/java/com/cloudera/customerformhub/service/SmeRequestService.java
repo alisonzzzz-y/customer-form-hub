@@ -118,11 +118,6 @@ public class SmeRequestService {
         return repository.save(existing);
     }
 
-    // Delete
-    public void deleteSmeRequest(Long id) {
-        repository.deleteById(id);
-    }
-
     // If the ETA has passed and it hasn't been returned yet, mark it Overdue
     private void applyOverdueStatus(SmeRequest request) {
         boolean notReturned = request.getReturnedAt() == null

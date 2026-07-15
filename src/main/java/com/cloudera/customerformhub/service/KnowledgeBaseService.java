@@ -56,11 +56,6 @@ public class KnowledgeBaseService {
         return knowledgeBaseRepository.save(existing);
     }
 
-    // delete a chunk by id
-    public void delete(Long id) {
-        knowledgeBaseRepository.deleteById(id);
-    }
-
     // Generate the embedding from the chunk's content and store it as a JSON string.
     // Called on create and update so the vector always matches the current content.
     private void regenerateEmbedding(KnowledgeBase chunk) {

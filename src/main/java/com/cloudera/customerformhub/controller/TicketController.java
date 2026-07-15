@@ -50,17 +50,6 @@ public class TicketController {
         return ResponseEntity.ok(updated);
     }
 
-    // DELETE /api/tickets/{id}  → delete a ticket
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteTicket(@PathVariable Long id) {
-        Ticket existing = ticketService.getTicketById(id);
-        if (existing == null) {
-            return ResponseEntity.notFound().build();
-        }
-        ticketService.deleteTicket(id);
-        return ResponseEntity.noContent().build();
-    }
-
     // PATCH /api/tickets/{id}/status  → update only the status
     @PatchMapping("/{id}/status")
     public ResponseEntity<Ticket> updateStatus(@PathVariable Long id, @RequestBody Map<String, String> body) {

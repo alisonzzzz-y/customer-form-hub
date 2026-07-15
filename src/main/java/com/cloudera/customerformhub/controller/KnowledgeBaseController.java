@@ -61,15 +61,4 @@ public class KnowledgeBaseController {
         }
         return ResponseEntity.ok(saved);
     }
-
-    // DELETE /api/knowledge-base/{id}  → delete a chunk
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        KnowledgeBase existing = knowledgeBaseService.findById(id);
-        if (existing == null) {
-            return ResponseEntity.notFound().build();
-        }
-        knowledgeBaseService.delete(id);
-        return ResponseEntity.noContent().build();
-    }
 }

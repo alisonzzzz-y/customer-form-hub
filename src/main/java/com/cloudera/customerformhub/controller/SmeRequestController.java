@@ -75,15 +75,4 @@ public class SmeRequestController {
         }
         return ResponseEntity.ok(updated);
     }
-
-    // DELETE /api/sme-requests/{id}  → delete
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteSmeRequest(@PathVariable Long id) {
-        SmeRequest existing = smeRequestService.getSmeRequestById(id);
-        if (existing == null) {
-            return ResponseEntity.notFound().build();
-        }
-        smeRequestService.deleteSmeRequest(id);
-        return ResponseEntity.noContent().build();
-    }
 }

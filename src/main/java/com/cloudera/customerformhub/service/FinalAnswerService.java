@@ -70,9 +70,4 @@ public class FinalAnswerService {
 
         return saved;
     }
-
-    // Delete an answer by id
-    public void deleteAnswer(Long id) {
-        repository.deleteById(id);
-    }
 }

@@ -30,11 +30,6 @@ public class TicketService {
         return repository.save(ticket);
     }
 
-    // Delete a ticket by id
-    public void deleteTicket(Long id) {
-        repository.deleteById(id);
-    }
-
     // Update only the status of a ticket (returns null if not found)
     public Ticket updateStatus(Long id, String status) {
         Ticket ticket = repository.findById(id).orElse(null);

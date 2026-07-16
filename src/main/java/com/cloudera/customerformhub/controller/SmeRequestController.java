@@ -75,4 +75,14 @@ public class SmeRequestController {
         }
         return ResponseEntity.ok(updated);
     }
+
+    // POST /api/sme-requests/{id}/unreturn  → undo the "Returned" mark
+    @PostMapping("/{id}/unreturn")
+    public ResponseEntity<SmeRequest> unreturn(@PathVariable Long id) {
+        SmeRequest updated = smeRequestService.unreturn(id);
+        if (updated == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(updated);
+    }
 }

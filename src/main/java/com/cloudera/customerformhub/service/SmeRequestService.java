@@ -118,6 +118,20 @@ public class SmeRequestService {
         return repository.save(existing);
     }
 
+    // Undo a "Returned" mark: clears the returnedAt timestamp and rolls the
+    // status back. PUT cannot express this — under our partial-update
+    // semantics a null field means "don't change" — so the intent gets its
+    // own endpoint.
+    public SmeRequest unreturn(Long id) {
+        SmeRequest existing = repository.findById(id).orElse(null);
+        if (existing == null) {
+            return null;
+        }
+        existing.setReturnedAt(null);
+        existing.setStatus(existing.getEta() != null ? "ETA Confirmed" : "Waiting for ETA");
+        return repository.save(existing);
+    }
+
     // If the ETA has passed and it hasn't been returned yet, mark it Overdue
     private void applyOverdueStatus(SmeRequest request) {
         boolean notReturned = request.getReturnedAt() == null

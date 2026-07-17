@@ -9,6 +9,7 @@ import com.cloudera.customerformhub.entity.Ticket;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
 import com.cloudera.customerformhub.repository.TicketRepository;
 import com.cloudera.customerformhub.service.EmbeddingService;
+import com.cloudera.customerformhub.service.TicketService;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
@@ -59,6 +60,11 @@ public class DataLoader implements CommandLineRunner {
             }
         });
 
+        // Migrate only the legacy ticket values we explicitly understand.
+        // Unknown values are left untouched so one dirty row can never stop
+        // application startup or break GET /api/tickets.
+        backfillTicketStatuses();
+
         // Seed tickets first; the other seeds depend on the Globex ticket's real id
         if (ticketRepository.count() == 0) {
             Long globexTicketId = seedTickets();
@@ -73,6 +79,22 @@ public class DataLoader implements CommandLineRunner {
 
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
+    }
+
+    private void backfillTicketStatuses() {
+        ticketRepository.findAll().forEach(ticket -> {
+            String current = ticket.getStatus();
+            try {
+                String normalised = TicketService.normaliseStatus(current);
+                if (!normalised.equals(current)) {
+                    ticket.setStatus(normalised);
+                    ticketRepository.save(ticket);
+                }
+            } catch (IllegalArgumentException ex) {
+                System.err.println(">>> DataLoader: leaving unknown ticket status unchanged for ticket id "
+                        + ticket.getId() + ": " + current);
+            }
+        });
     }
 
     private Long seedTickets() {

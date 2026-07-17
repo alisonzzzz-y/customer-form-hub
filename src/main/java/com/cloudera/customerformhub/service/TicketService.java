@@ -24,13 +24,14 @@ public class TicketService {
 
     // Get all tickets
     public List<Ticket> getAllTickets() {
-        return repository.findAll().stream().map(this::normaliseStoredStatus).toList();
+        // Reads are deliberately tolerant. Historical or manually-created
+        // values must not make the whole ticket list fail.
+        return repository.findAll();
     }
 
     // Get one ticket by id (returns null if not found)
     public Ticket getTicketById(Long id) {
-        Ticket ticket = repository.findById(id).orElse(null);
-        return ticket == null ? null : normaliseStoredStatus(ticket);
+        return repository.findById(id).orElse(null);
     }
 
     // Create or update a ticket
@@ -69,16 +70,7 @@ public class TicketService {
         return repository.save(existing);
     }
 
-    private Ticket normaliseStoredStatus(Ticket ticket) {
-        String normalised = normaliseStatus(ticket.getStatus());
-        if (!normalised.equals(ticket.getStatus())) {
-            ticket.setStatus(normalised);
-            return repository.save(ticket);
-        }
-        return ticket;
-    }
-
-    static String normaliseStatus(String status) {
+    public static String normaliseStatus(String status) {
         if (status == null || status.isBlank()) return "New";
 
         // One-time compatibility for rows created by the earlier, smaller model.

@@ -3,7 +3,6 @@ package com.cloudera.customerformhub.service;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -16,9 +15,6 @@ public class EmbeddingService {
     private final RestClient restClient;
     private final KnowledgeBaseRepository repository;
     private final ObjectMapper objectMapper = new ObjectMapper();  // Used to convert vectors to and from JSON.
-
-    @Value("${openai.api.key}")
-    private String apiKey;
 
     public EmbeddingService(RestClient restClient, KnowledgeBaseRepository repository) {
         this.restClient = restClient;
@@ -33,9 +29,7 @@ public class EmbeddingService {
         );
 
         Map<String, Object> response = restClient.post()
-                .uri("https://api.openai.com/v1/embeddings")
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
+                .uri("/embeddings")
                 .body(requestBody)
                 .retrieve()
                 .body(Map.class);

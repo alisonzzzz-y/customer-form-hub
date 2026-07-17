@@ -5,10 +5,10 @@ import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.IOException;
 
 @Service
 public class DocxParserService {
@@ -29,8 +29,12 @@ public class DocxParserService {
                     }
                 }
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to read the uploaded Word file", e);
+        } catch (Exception ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "The uploaded Word document could not be read.",
+                    ex
+            );
         }
 
         return text.toString();

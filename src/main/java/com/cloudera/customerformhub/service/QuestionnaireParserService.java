@@ -1,10 +1,11 @@
 package com.cloudera.customerformhub.service;
 
 import org.apache.poi.ss.usermodel.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,13 +39,17 @@ public class QuestionnaireParserService {
                 }
             }
 
-            if (!questionColumnFound) {
-                throw new IllegalArgumentException(
-                        "No 'Question' column found in any sheet: please use the questionnaire template");
-            }
+        } catch (Exception ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "The uploaded Excel workbook could not be read.",
+                    ex
+            );
+        }
 
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to read the uploaded Excel file", e);
+        if (!questionColumnFound) {
+            throw new IllegalArgumentException(
+                    "No 'Question' column found in any sheet: please use the questionnaire template");
         }
 
         List<ParsedQuestion> questions = new ArrayList<>();

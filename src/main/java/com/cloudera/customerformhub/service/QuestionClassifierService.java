@@ -2,7 +2,6 @@ package com.cloudera.customerformhub.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import com.cloudera.customerformhub.service.QuestionnaireParserService.ParsedQuestion;
@@ -16,9 +15,6 @@ public class QuestionClassifierService {
 
     private final RestClient restClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @Value("${openai.api.key}")
-    private String apiKey;
 
     // The fixed set of departments the LLM must choose from
     private static final List<String> DEPARTMENTS = List.of(
@@ -65,9 +61,7 @@ public class QuestionClassifierService {
 
         // 3. Call OpenAI
         Map<String, Object> response = restClient.post()
-                .uri("https://api.openai.com/v1/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
+                .uri("/chat/completions")
                 .body(requestBody)
                 .retrieve()
                 .body(Map.class);
@@ -110,9 +104,7 @@ public class QuestionClassifierService {
         );
 
         Map<String, Object> response = restClient.post()
-                .uri("https://api.openai.com/v1/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
+                .uri("/chat/completions")
                 .body(requestBody)
                 .retrieve()
                 .body(Map.class);

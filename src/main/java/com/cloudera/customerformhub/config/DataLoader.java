@@ -50,6 +50,15 @@ public class DataLoader implements CommandLineRunner {
             seedData();
         }
 
+        // Backfill the lifecycle column for databases created before status
+        // was added. Approved rows remain Approved; all others enter review.
+        repository.findAll().forEach(chunk -> {
+            if (chunk.getStatus() == null || chunk.getStatus().isBlank()) {
+                chunk.synchroniseLifecycleState();
+                repository.save(chunk);
+            }
+        });
+
         // Seed tickets first; the other seeds depend on the Globex ticket's real id
         if (ticketRepository.count() == 0) {
             Long globexTicketId = seedTickets();
@@ -74,12 +83,12 @@ public class DataLoader implements CommandLineRunner {
                 "New logo, evaluating platform", null, dt(2025, 5, 28, 9, 15)));
 
         Ticket globex = ticketRepository.save(new Ticket(
-                "Globex Inc", "Jane Smith", "Sarah", "Intake Missing",
+                "Globex Inc", "Jane Smith", "Sarah", "Intake Review",
                 "High", "Unknown", d(2025, 5, 26),
                 "Renewal, medium value", dt(2025, 5, 23, 15, 0), dt(2025, 5, 19, 9, 7)));
 
         ticketRepository.save(new Ticket(
-                "Initech", "—", "Sarah", "In Review",
+                "Initech", "—", "Sarah", "In Progress",
                 "Medium", "Yes", d(2025, 5, 28),
                 "Expansion opportunity", dt(2025, 5, 27, 14, 0), dt(2025, 5, 20, 11, 30)));
 

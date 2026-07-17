@@ -5,9 +5,14 @@ import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class KnowledgeBaseService {
+
+    private static final Set<String> VALID_STATUSES = Set.of(
+            "Draft", "Pending Review", "Approved", "Deprecated", "Archived"
+    );
 
     // constructor injection
     private final KnowledgeBaseRepository knowledgeBaseRepository;
@@ -31,6 +36,7 @@ public class KnowledgeBaseService {
 
     // create a new knowledge chunk, generating its embedding from the content
     public KnowledgeBase create(KnowledgeBase chunk) {
+        normaliseLifecycle(chunk);
         regenerateEmbedding(chunk);
         return knowledgeBaseRepository.save(chunk);
     }
@@ -49,11 +55,30 @@ public class KnowledgeBaseService {
         existing.setLastUpdated(updated.getLastUpdated());
         existing.setSharingStatus(updated.getSharingStatus());
         existing.setDepartment(updated.getDepartment());
-        existing.setApproved(updated.getApproved());
+        if (updated.getStatus() != null) {
+            existing.setStatus(updated.getStatus());
+        } else if (updated.getApproved() != null) {
+            // Compatibility with clients that still send only approved=true/false.
+            existing.setStatus(Boolean.TRUE.equals(updated.getApproved())
+                    ? "Approved" : "Pending Review");
+        }
+        normaliseLifecycle(existing);
 
         // content may have changed, so regenerate the embedding
         regenerateEmbedding(existing);
         return knowledgeBaseRepository.save(existing);
+    }
+
+    private void normaliseLifecycle(KnowledgeBase chunk) {
+        String status = chunk.getStatus();
+        if (status == null || status.isBlank()) {
+            status = Boolean.TRUE.equals(chunk.getApproved()) ? "Approved" : "Pending Review";
+        }
+        if (!VALID_STATUSES.contains(status)) {
+            throw new IllegalArgumentException("Invalid knowledge status: " + status);
+        }
+        chunk.setStatus(status);
+        chunk.setApproved("Approved".equals(status));
     }
 
     // Generate the embedding from the chunk's content and store it as a JSON string.

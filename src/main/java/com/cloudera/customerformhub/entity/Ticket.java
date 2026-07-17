@@ -19,7 +19,7 @@ public class Ticket {
     private String assignedTo;  // the GOM analyst owner, e.g. "Sarah"
 
     @Column(nullable = false)
-    private String status;      // New / Intake Missing / In Review / Waiting SME / Completed
+    private String status;      // Full PRD lifecycle; validated by TicketService
 
     private String urgency;     // High / Medium / Low
     private String ndaStatus;   // Yes / No / Unknown

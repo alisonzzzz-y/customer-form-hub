@@ -1,5 +1,6 @@
 package com.cloudera.customerformhub.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
@@ -36,11 +37,17 @@ public class KnowledgeBase {
     @Column(length = 100)
     private String department;
 
+    @JsonIgnore
     @Column(columnDefinition = "LONGTEXT")
     private String embedding;
 
     @Column(nullable = false)
     private Boolean approved = false;
+
+    // Full knowledge lifecycle from the PRD. Kept alongside approved for
+    // backwards compatibility with older clients and existing database rows.
+    @Column(length = 50)
+    private String status;
 
     //constructors
     public KnowledgeBase() {
@@ -66,14 +73,25 @@ public class KnowledgeBase {
         this.department = department;
         this.embedding = embedding;
         this.approved = approved;
+        this.status = Boolean.TRUE.equals(approved) ? "Approved" : "Pending Review";
     }
 
-    //set default values automatically before a new record is saved
+    // Keep the legacy approved flag and the richer lifecycle status aligned.
     @PrePersist
     public void beforeInsert() {
-        if (this.approved == null) {
-            this.approved = false;
+        synchroniseLifecycleState();
+    }
+
+    @PreUpdate
+    public void beforeUpdate() {
+        synchroniseLifecycleState();
+    }
+
+    public void synchroniseLifecycleState() {
+        if (this.status == null || this.status.isBlank()) {
+            this.status = Boolean.TRUE.equals(this.approved) ? "Approved" : "Pending Review";
         }
+        this.approved = "Approved".equals(this.status);
     }
 
     // Getters and Setters
@@ -155,5 +173,13 @@ public class KnowledgeBase {
 
     public void setApproved(Boolean approved) {
         this.approved = approved;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
     }
 }

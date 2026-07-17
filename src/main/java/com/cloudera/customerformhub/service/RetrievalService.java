@@ -37,7 +37,10 @@ public class RetrievalService {
 
         // 3. For each valid chunk, compute its similarity ONCE and keep it with the chunk.
         return allChunks.stream()
-                .filter(chunk -> Boolean.TRUE.equals(chunk.getApproved()))
+                // Only entries in the real Approved lifecycle state may feed AI.
+                // The approved flag is retained as a compatibility guard.
+                .filter(chunk -> "Approved".equals(chunk.getStatus())
+                        && Boolean.TRUE.equals(chunk.getApproved()))
                 .filter(chunk -> chunk.getEmbedding() != null && !chunk.getEmbedding().isEmpty())
                 .map(chunk -> new ScoredChunk(
                         chunk,

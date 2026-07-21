@@ -30,9 +30,11 @@ public class SmeRequestService {
         this.smeRequestQuestionService = smeRequestQuestionService;
     }
 
-    // Get all SME requests
+    // Get all SME requests, with overdue auto-detection applied
     public List<SmeRequest> getAllSmeRequests() {
-        return repository.findAll();
+        List<SmeRequest> requests = repository.findAll();
+        requests.forEach(this::applyOverdueStatus);
+        return requests;
     }
 
     // Get all SME requests for one ticket, with overdue auto-detection applied

@@ -52,6 +52,9 @@ public class KnowledgeBaseService {
         existing.setSectionTitle(updated.getSectionTitle());
         existing.setContent(updated.getContent());
         existing.setSource(updated.getSource());
+        if (updated.getSourceKey() != null && !updated.getSourceKey().isBlank()) {
+            existing.setSourceKey(updated.getSourceKey());
+        }
         existing.setLastUpdated(updated.getLastUpdated());
         existing.setSharingStatus(updated.getSharingStatus());
         existing.setDepartment(updated.getDepartment());

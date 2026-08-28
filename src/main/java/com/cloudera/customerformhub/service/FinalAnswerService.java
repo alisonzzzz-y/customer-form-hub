@@ -7,6 +7,8 @@ import com.cloudera.customerformhub.repository.FormQuestionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Service
 public class FinalAnswerService {
@@ -63,8 +65,16 @@ public class FinalAnswerService {
             questionRepository.findById(saved.getQuestionId()).ifPresent(question -> {
                 if (!"Answered".equals(question.getStatus())) {
                     question.setStatus("Answered");
-                    questionRepository.save(question);
                 }
+                question.setAiSuggestionSourceId(saved.getSourceChunkId());
+                if (saved.getSourceChunkId() != null && "Knowledge Base".equals(saved.getSourceType())) {
+                    question.setReviewOutcome(Boolean.TRUE.equals(saved.getIsEdited())
+                            ? "EDITED" : "ACCEPTED");
+                } else {
+                    question.setReviewOutcome(null);
+                }
+                question.setReviewedAt(LocalDateTime.now(ZoneOffset.UTC));
+                questionRepository.save(question);
             });
         }
 

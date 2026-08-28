@@ -28,6 +28,11 @@ public class KnowledgeBase {
     @Column(length = 500)
     private String source;
 
+    // Stable benchmark identifier. Unlike the generated database ID, this is
+    // consistent across environments and dataset reloads.
+    @Column(name = "source_key", length = 255)
+    private String sourceKey;
+
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
 
@@ -92,6 +97,16 @@ public class KnowledgeBase {
             this.status = Boolean.TRUE.equals(this.approved) ? "Approved" : "Pending Review";
         }
         this.approved = "Approved".equals(this.status);
+        if (this.sourceKey == null || this.sourceKey.isBlank()) {
+            this.sourceKey = buildSourceKey(this.documentTitle, this.sectionTitle);
+        }
+    }
+
+    public static String buildSourceKey(String documentTitle, String sectionTitle) {
+        String raw = ((documentTitle == null ? "source" : documentTitle) + "-"
+                + (sectionTitle == null ? "entry" : sectionTitle)).toLowerCase();
+        String key = raw.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        return key.isBlank() ? "source-entry" : key;
     }
 
     // Getters and Setters
@@ -134,6 +149,9 @@ public class KnowledgeBase {
     public void setSource(String source) {
         this.source = source;
     }
+
+    public String getSourceKey() { return sourceKey; }
+    public void setSourceKey(String sourceKey) { this.sourceKey = sourceKey; }
 
     public LocalDateTime getLastUpdated() {
         return lastUpdated;

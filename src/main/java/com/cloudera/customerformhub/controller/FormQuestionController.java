@@ -1,9 +1,11 @@
 package com.cloudera.customerformhub.controller;
 
 import com.cloudera.customerformhub.dto.SearchResult;
+import com.cloudera.customerformhub.dto.ReviewEscalationRequest;
 import com.cloudera.customerformhub.entity.FormQuestion;
 import com.cloudera.customerformhub.service.FormQuestionService;
 import com.cloudera.customerformhub.service.RetrievalService;
+import com.cloudera.customerformhub.service.ReviewDecisionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,10 +18,13 @@ public class FormQuestionController {
 
     private final FormQuestionService questionService;
     private final RetrievalService retrievalService;
+    private final ReviewDecisionService reviewDecisionService;
 
-    public FormQuestionController(FormQuestionService questionService, RetrievalService retrievalService) {
+    public FormQuestionController(FormQuestionService questionService, RetrievalService retrievalService,
+                                  ReviewDecisionService reviewDecisionService) {
         this.questionService = questionService;
         this.retrievalService = retrievalService;
+        this.reviewDecisionService = reviewDecisionService;
     }
 
     // GET /api/questions  → all questions
@@ -90,5 +95,19 @@ public class FormQuestionController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(updated);
+    }
+
+    @PostMapping("/{id}/review-escalation")
+    public ResponseEntity<FormQuestion> escalate(@PathVariable Long id,
+                                                  @RequestBody ReviewEscalationRequest request) {
+        FormQuestion updated = reviewDecisionService.escalate(
+                id, request.getType(), request.getSuggestionSourceId());
+        return updated == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(updated);
+    }
+
+    @PostMapping("/{id}/review-reopen")
+    public ResponseEntity<FormQuestion> reopen(@PathVariable Long id) {
+        FormQuestion updated = reviewDecisionService.reopen(id);
+        return updated == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(updated);
     }
 }

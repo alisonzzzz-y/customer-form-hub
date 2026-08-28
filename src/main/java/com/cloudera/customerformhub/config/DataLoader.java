@@ -10,13 +10,19 @@ import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
 import com.cloudera.customerformhub.repository.TicketRepository;
 import com.cloudera.customerformhub.service.EmbeddingService;
 import com.cloudera.customerformhub.service.TicketService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.core.annotation.Order;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Comparator;
+import java.util.List;
 
 @Component
+@Order(0)
 public class DataLoader implements CommandLineRunner {
 
     private final KnowledgeBaseRepository repository;
@@ -24,24 +30,28 @@ public class DataLoader implements CommandLineRunner {
     private final TicketRepository ticketRepository;
     private final SmeRequestRepository smeRequestRepository;
     private final FormQuestionRepository formQuestionRepository;
+    private final boolean refreshDemoData;
 
     public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService,
                       TicketRepository ticketRepository, SmeRequestRepository smeRequestRepository,
-                      FormQuestionRepository formQuestionRepository) {
+                      FormQuestionRepository formQuestionRepository,
+                      @Value("${demo-data.refresh:false}") boolean refreshDemoData) {
         this.repository = repository;
         this.embeddingService = embeddingService;
         this.ticketRepository = ticketRepository;
         this.smeRequestRepository = smeRequestRepository;
         this.formQuestionRepository = formQuestionRepository;
+        this.refreshDemoData = refreshDemoData;
     }
 
+    private LocalDateTime demoDate(int daysFromToday) {
+        return LocalDate.now(ZoneOffset.UTC).plusDays(daysFromToday).atStartOfDay();
+    }
+
+    // Knowledge-base examples keep fixed document revision dates. Ticket and
+    // SME demo dates use demoDate() so they remain useful over time.
     private LocalDateTime d(int year, int month, int day) {
         return LocalDate.of(year, month, day).atStartOfDay();
-    }
-
-    // Same as d() but with hour and minute, for ETA / created timestamps
-    private LocalDateTime dt(int year, int month, int day, int hour, int minute) {
-        return LocalDateTime.of(year, month, day, hour, minute);
     }
 
     @Override
@@ -54,7 +64,8 @@ public class DataLoader implements CommandLineRunner {
         // Backfill the lifecycle column for databases created before status
         // was added. Approved rows remain Approved; all others enter review.
         repository.findAll().forEach(chunk -> {
-            if (chunk.getStatus() == null || chunk.getStatus().isBlank()) {
+            if (chunk.getStatus() == null || chunk.getStatus().isBlank()
+                    || chunk.getSourceKey() == null || chunk.getSourceKey().isBlank()) {
                 chunk.synchroniseLifecycleState();
                 repository.save(chunk);
             }
@@ -77,8 +88,55 @@ public class DataLoader implements CommandLineRunner {
             }
         }
 
+        if (refreshDemoData) {
+            refreshDemoData();
+        }
+
+        seedDemoReviewOutcomes();
+
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
+    }
+
+    /**
+     * Gives a fresh demo database a visible, synthetic review distribution.
+     * It only touches the seeded Globex questions and never overwrites a
+     * database that already contains a reviewer outcome.
+     */
+    private void seedDemoReviewOutcomes() {
+        if (formQuestionRepository.findAll().stream()
+                .anyMatch(question -> question.getReviewOutcome() != null && !question.getReviewOutcome().isBlank())) {
+            return;
+        }
+
+        List<FormQuestion> demoQuestions = formQuestionRepository.findAll().stream()
+                .filter(question -> question.getRowReference() != null && question.getRowReference().matches("Q[1-8]"))
+                .sorted(Comparator.comparingInt(question -> Integer.parseInt(question.getRowReference().substring(1))))
+                .toList();
+        List<Long> approvedSourceIds = repository.findAll().stream()
+                .filter(chunk -> "Approved".equals(chunk.getStatus()) && Boolean.TRUE.equals(chunk.getApproved()))
+                .map(KnowledgeBase::getId)
+                .filter(id -> id != null)
+                .toList();
+
+        if (demoQuestions.size() != 8 || approvedSourceIds.size() < 8) {
+            return;
+        }
+
+        String[] outcomes = {"ACCEPTED", "ACCEPTED", "ACCEPTED", "ACCEPTED", "ACCEPTED", "EDITED", "EDITED", "ESCALATED"};
+        LocalDateTime nowUtc = LocalDateTime.now(ZoneOffset.UTC);
+        for (int index = 0; index < demoQuestions.size(); index++) {
+            FormQuestion question = demoQuestions.get(index);
+            LocalDateTime reviewedAt = nowUtc.minusDays(14L - index);
+            question.setAiSuggestionSourceId(approvedSourceIds.get(index));
+            question.setReviewOutcome(outcomes[index]);
+            question.setReviewedAt(reviewedAt);
+            if ("ESCALATED".equals(outcomes[index])) {
+                question.setAeClarificationRequestedAt(reviewedAt.minusHours(2));
+            }
+        }
+        formQuestionRepository.saveAll(demoQuestions);
+        System.out.println(">>> DataLoader: seeded 8 synthetic AI review outcomes (5 accepted, 2 edited, 1 escalated).");
     }
 
     private void backfillTicketStatuses() {
@@ -101,23 +159,23 @@ public class DataLoader implements CommandLineRunner {
         // customerName, createdBy, assignedTo, status, urgency, ndaStatus, deadline, businessImpact, eta, createdAt
         ticketRepository.save(new Ticket(
                 "Acme Corp", "—", "Unassigned", "New",
-                "Medium", "Yes", d(2025, 6, 2),
-                "New logo, evaluating platform", null, dt(2025, 5, 28, 9, 15)));
+                "Medium", "Yes", demoDate(7),
+                "New logo, evaluating platform", null, demoDate(-5)));
 
         Ticket globex = ticketRepository.save(new Ticket(
                 "Globex Inc", "Jane Smith", "Sarah", "Intake Review",
-                "High", "Unknown", d(2025, 5, 26),
-                "Renewal, medium value", dt(2025, 5, 23, 15, 0), dt(2025, 5, 19, 9, 7)));
+                "High", "Unknown", demoDate(0),
+                "Renewal, medium value", demoDate(2), demoDate(-4)));
 
         ticketRepository.save(new Ticket(
                 "Initech", "—", "Sarah", "In Progress",
-                "Medium", "Yes", d(2025, 5, 28),
-                "Expansion opportunity", dt(2025, 5, 27, 14, 0), dt(2025, 5, 20, 11, 30)));
+                "Medium", "Yes", demoDate(4),
+                "Expansion opportunity", demoDate(3), demoDate(-3)));
 
         ticketRepository.save(new Ticket(
                 "Umbrella Co", "—", "Alex", "Waiting SME",
-                "High", "Yes", d(2025, 5, 29),
-                "Strategic account renewal", dt(2025, 5, 29, 12, 0), dt(2025, 5, 21, 16, 45)));
+                "High", "Yes", demoDate(-2),
+                "Strategic account renewal", demoDate(1), demoDate(-7)));
 
         System.out.println(">>> DataLoader: inserted " + ticketRepository.count() + " tickets.");
 
@@ -130,30 +188,93 @@ public class DataLoader implements CommandLineRunner {
 
         smeRequestRepository.save(new SmeRequest(
                 globexTicketId, "InfoSec", "InfoSec Team", 12,
-                dt(2025, 5, 23, 15, 0), "ETA Confirmed", "Confirmed via email by Alex",
-                dt(2025, 5, 20, 10, 0), null));
+                demoDate(1).withHour(15), "ETA Confirmed", "Confirmed via email by Alex",
+                demoDate(-2).withHour(10), null));
 
         smeRequestRepository.save(new SmeRequest(
                 globexTicketId, "Legal", "Legal Team", 5,
                 null, "Waiting for ETA", null,
-                dt(2025, 5, 20, 10, 0), null));
+                demoDate(-2).withHour(10), null));
 
         smeRequestRepository.save(new SmeRequest(
                 globexTicketId, "HR", "HR Ops", 8,
-                dt(2025, 5, 22, 17, 0), "ETA Confirmed", "Confirmed by HR lead",
-                dt(2025, 5, 20, 10, 0), null));
+                demoDate(2).withHour(17), "ETA Confirmed", "Confirmed by HR lead",
+                demoDate(-2).withHour(10), null));
 
         smeRequestRepository.save(new SmeRequest(
                 globexTicketId, "Finance", "Finance Team", 6,
-                dt(2025, 5, 21, 14, 0), "In Progress", null,
-                dt(2025, 5, 20, 10, 0), null));
+                demoDate(-1).withHour(14), "Overdue", null,
+                demoDate(-2).withHour(10), null));
 
         smeRequestRepository.save(new SmeRequest(
                 globexTicketId, "ESG", "ESG Team", 5,
-                dt(2025, 5, 21, 12, 0), "In Progress", null,
-                dt(2025, 5, 20, 10, 0), null));
+                demoDate(4).withHour(12), "In Progress", null,
+                demoDate(-2).withHour(10), null));
 
         System.out.println(">>> DataLoader: inserted " + smeRequestRepository.count() + " SME requests.");
+    }
+
+    /**
+     * One-time maintenance for a disposable demo database. It keeps ten active
+     * tickets, with a small mix of due-today, overdue, and upcoming work, and
+     * marks all other demo records as closed. The property is off by default.
+     */
+    private void refreshDemoData() {
+        LocalDateTime today = demoDate(0);
+        int[] activeDueOffsets = {0, 0, 0, 2, 4, 7, 10, 14, 21, -2};
+        String[] activeStatuses = {
+                "Intake Review", "Ready for Review", "In Progress", "Waiting SME", "In Progress",
+                "New", "Ready for Review", "In Progress", "Waiting SME", "In Progress"
+        };
+
+        List<Ticket> tickets = ticketRepository.findAll().stream()
+                .sorted(Comparator.comparing(Ticket::getId).reversed())
+                .toList();
+
+        for (int index = 0; index < tickets.size(); index++) {
+            Ticket ticket = tickets.get(index);
+            if (index < activeDueOffsets.length) {
+                ticket.setStatus(activeStatuses[index]);
+                ticket.setDeadline(demoDate(activeDueOffsets[index]));
+                ticket.setEta(demoDate(Math.max(activeDueOffsets[index] - 1, 0)).withHour(16));
+                ticket.setAssignedTo("Sarah Chen");
+            } else {
+                ticket.setStatus("Closed");
+                ticket.setDeadline(today.minusDays((index % 21) + 2));
+                ticket.setEta(null);
+            }
+        }
+        ticketRepository.saveAll(tickets);
+
+        List<SmeRequest> requests = smeRequestRepository.findAll().stream()
+                .sorted(Comparator.comparing(SmeRequest::getId).reversed())
+                .toList();
+        for (int index = 0; index < requests.size(); index++) {
+            SmeRequest request = requests.get(index);
+            if (index == 0) {
+                request.setStatus("ETA Confirmed");
+                request.setEta(today.plusDays(1).withHour(15));
+                request.setReturnedAt(null);
+            } else if (index == 1) {
+                request.setStatus("ETA Confirmed");
+                request.setEta(today.plusDays(2).withHour(11));
+                request.setReturnedAt(null);
+            } else if (index == 2) {
+                request.setStatus("Overdue");
+                request.setEta(today.minusDays(1).withHour(14));
+                request.setReturnedAt(null);
+            } else if (index == 3) {
+                request.setStatus("Waiting for ETA");
+                request.setEta(null);
+                request.setReturnedAt(null);
+            } else {
+                request.setStatus("Returned");
+                request.setEta(today.minusDays(1));
+                request.setReturnedAt(today.minusDays(1).withHour(12));
+            }
+        }
+        smeRequestRepository.saveAll(requests);
+        System.out.println(">>> DataLoader: refreshed demo dates (10 active tickets, 1 overdue ticket, 3 due today).");
     }
 
     private void seedFormQuestions(Long globexTicketId) {

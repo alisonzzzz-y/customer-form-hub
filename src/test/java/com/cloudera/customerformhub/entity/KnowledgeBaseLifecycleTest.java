@@ -30,4 +30,15 @@ class KnowledgeBaseLifecycleTest {
         assertEquals("Archived", entry.getStatus());
         assertFalse(entry.getApproved());
     }
+
+    @Test
+    void lifecycleCreatesStableSourceKey() {
+        KnowledgeBase entry = new KnowledgeBase();
+        entry.setDocumentTitle("Information Security Policy v3.2");
+        entry.setSectionTitle("Encryption of data at rest");
+        entry.setStatus("Approved");
+        entry.synchroniseLifecycleState();
+
+        assertEquals("information-security-policy-v3-2-encryption-of-data-at-rest", entry.getSourceKey());
+    }
 }

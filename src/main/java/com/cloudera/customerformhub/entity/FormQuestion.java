@@ -23,6 +23,13 @@ public class FormQuestion {
     private String riskLevel;       // High / Medium / Low (optional)
     private String rowReference;    // e.g. the row in the original Excel, optional
 
+    // Current AI-review state. V1 intentionally keeps only the latest outcome;
+    // operational request timestamps remain available separately.
+    private Long aiSuggestionSourceId;
+    private String reviewOutcome;   // ACCEPTED / EDITED / ESCALATED
+    private LocalDateTime reviewedAt;
+    private LocalDateTime aeClarificationRequestedAt;
+
     private LocalDateTime createdAt;
 
     @PrePersist
@@ -70,4 +77,18 @@ public class FormQuestion {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public Long getAiSuggestionSourceId() { return aiSuggestionSourceId; }
+    public void setAiSuggestionSourceId(Long aiSuggestionSourceId) { this.aiSuggestionSourceId = aiSuggestionSourceId; }
+
+    public String getReviewOutcome() { return reviewOutcome; }
+    public void setReviewOutcome(String reviewOutcome) { this.reviewOutcome = reviewOutcome; }
+
+    public LocalDateTime getReviewedAt() { return reviewedAt; }
+    public void setReviewedAt(LocalDateTime reviewedAt) { this.reviewedAt = reviewedAt; }
+
+    public LocalDateTime getAeClarificationRequestedAt() { return aeClarificationRequestedAt; }
+    public void setAeClarificationRequestedAt(LocalDateTime aeClarificationRequestedAt) {
+        this.aeClarificationRequestedAt = aeClarificationRequestedAt;
+    }
 }

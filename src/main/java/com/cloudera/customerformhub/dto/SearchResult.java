@@ -12,6 +12,7 @@ public class SearchResult {
     private String sectionTitle;
     private String content;
     private String source;
+    private String sourceKey;
     private LocalDateTime lastUpdated;
     private String sharingStatus;
     private String department;
@@ -25,6 +26,7 @@ public class SearchResult {
         this.sectionTitle = chunk.getSectionTitle();
         this.content = chunk.getContent();
         this.source = chunk.getSource();
+        this.sourceKey = chunk.getSourceKey();
         this.lastUpdated = chunk.getLastUpdated();
         this.sharingStatus = chunk.getSharingStatus();
         this.department = chunk.getDepartment();
@@ -51,6 +53,8 @@ public class SearchResult {
     public String getSource() {
         return source;
     }
+
+    public String getSourceKey() { return sourceKey; }
 
     public LocalDateTime getLastUpdated() {
         return lastUpdated;

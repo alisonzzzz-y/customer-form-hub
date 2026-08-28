@@ -1,26 +1,116 @@
-# Customer Forms Hub — Backend
+# Customer Forms Hub
 
-Spring Boot backend for the Customer Forms Hub capstone project. It stores customer questionnaire tickets, extracts questions from Excel or Word files, searches approved knowledge, tracks SME requests, and exports final answers.
+> A Java and Spring Boot application for handling customer security and compliance questionnaires.
 
-The frontend repository is [customer-form-hub-frontend](https://github.com/alisonzzzz-y/customer-form-hub-frontend).
+Customer-facing teams often need to answer long questionnaires quickly. The information can be spread across policy documents, and some answers need a specialist to check them. This project brings that work into one review flow.
 
-## What you need
+AI helps sort questions and find useful internal sources. A reviewer can then accept an answer, change it, or send the question to an SME or AE. The system does not approve or send AI answers by itself.
 
-- Java 21
-- MySQL 8+
-- An OpenAI API key
+[Frontend repository](https://github.com/alisonzzzz-y/customer-form-hub-frontend) · [中文说明](README.zh-CN.md)
 
-Maven does not need to be installed separately. The repository includes the Maven wrapper.
+<!--
+SCREENSHOT NOTE
+The screenshots belong in the frontend README because it is the main project entry point.
+Link to the frontend README from here rather than repeating the same images.
+-->
+
+## What the application does
+
+```text
+Create ticket
+  -> Upload an Excel or Word questionnaire
+  -> Read the questions and group them by department
+  -> Find relevant approved knowledge sources
+  -> Accept, edit, or send open questions to an SME or AE
+  -> Complete a final review
+  -> Export the response
+```
+
+The React frontend provides the main workspace, knowledge-base screens, reports, and an AI Performance page for managers.
+
+## Deployment
+
+The deployed demo uses a MySQL database hosted on Railway. Local development can use any MySQL 8 or later database through the environment variables shown below.
+
+[Open the live demo](https://customer-form-hub.vercel.app/)
+
+## My contribution
+
+I built this backend independently, including the API, document processing, AI integration, data model, review workflow, retrieval check, and automated tests.
+
+## How AI is used
+
+### Sort incoming questions
+
+The application uses `gpt-4o-mini` to place uploaded questions into departments such as InfoSec, Legal, HR, Finance, and ESG. It checks the returned structure before saving it to the workflow.
+
+### Find useful knowledge
+
+Knowledge-base content is prepared with `text-embedding-3-small`. When a reviewer opens a question, the backend searches approved knowledge entries and returns the three closest matches. Each match keeps its source identifier, so the reviewer can see where it came from.
+
+The technical implementation uses stored embeddings and cosine similarity. This is an internal search aid, not a system that writes and approves final answers on its own.
+
+### Keep people in control
+
+A reviewer can accept a suggestion unchanged, edit it before approval, send it to an SME, or ask an AE for clarification. The AI Performance page shows the latest result for each AI-assisted question.
+
+## A small retrieval check
+
+The project includes a versioned synthetic test set at `src/main/resources/ai-performance/retrieval-benchmark-v1.json`. It checks whether the expected knowledge source appears in the first one or three search results.
+
+| Result from the local demo run | Value |
+|---|---:|
+| Test cases | 12 |
+| Expected source ranked first | 100% |
+| Expected source in the first three | 100% |
+| Failed or skipped cases | 0 |
+
+This is an initial smoke test with synthetic data. It checks that retrieval works as expected after changes. It does not measure live answer quality or prove that the AI can answer customer questions independently.
+
+Run the check against your configured knowledge base:
+
+```bash
+AI_EVALUATION_RUN=true ./mvnw spring-boot:run
+```
+
+## Main parts of the system
+
+```mermaid
+flowchart LR
+    UI[React app] --> API[Spring Boot API]
+    API --> Intake[Read documents and sort questions]
+    API --> Search[Search approved knowledge]
+    API --> Review[Human review and SME workflow]
+    Intake --> OAI[OpenAI API]
+    Search --> OAI
+    API --> DB[(MySQL)]
+```
+
+## Tech used
+
+| Area | Tools |
+|---|---|
+| Backend | Java 21, Spring Boot 3.5, Spring Web |
+| Data | Spring Data JPA, Hibernate, MySQL |
+| AI | OpenAI REST API, `gpt-4o-mini`, `text-embedding-3-small` |
+| Files | Apache POI for Excel and Word files |
+| Tests and checks | JUnit 5, Mockito, H2, GitHub Actions |
 
 ## Run locally
 
-Create a MySQL database:
+### You need
+
+- Java 21
+- MySQL 8 or later
+- An OpenAI Platform API key
+
+Create a local database:
 
 ```sql
 CREATE DATABASE formhub;
 ```
 
-Set the required environment variables:
+Set the local configuration:
 
 ```bash
 export OPENAI_API_KEY="your-key"
@@ -29,131 +119,36 @@ export DB_USERNAME="root"
 export DB_PASSWORD="your-password"
 ```
 
-Start the backend:
+Start the API:
 
 ```bash
 ./mvnw spring-boot:run
 ```
 
-The API will be available at:
+The API is available at `http://localhost:8080/api` by default. If that port is already in use, set `PORT` and use the same address in the frontend's `VITE_API_BASE` setting.
 
-```text
-http://localhost:8080/api
-```
+## Useful API endpoints
 
-Check that it is running:
+| What it is for | Endpoint |
+|---|---|
+| List tickets | `GET /api/tickets` |
+| Import a questionnaire | `POST /api/questionnaire/import?ticketId={id}` |
+| Search the knowledge base | `POST /api/knowledge-base/search` |
+| Save an approved answer | `POST /api/final-answers` |
+| Ask an SME for help | `POST /api/sme-requests` |
+| Read AI review results | `GET /api/ai-performance/review-summary` |
+| Read retrieval test runs | `GET /api/ai-performance/retrieval-runs` |
 
-```bash
-curl http://localhost:8080/api/tickets
-```
-
-## Environment variables
-
-| Variable | Required | Default | Purpose |
-|---|---:|---|---|
-| `OPENAI_API_KEY` | Yes | — | Question classification and knowledge search |
-| `DB_URL` | No | `jdbc:mysql://localhost:3306/formhub` | MySQL connection URL |
-| `DB_USERNAME` | No | `root` | MySQL username |
-| `DB_PASSWORD` | No | empty | MySQL password |
-| `PORT` | No | `8080` | Server port |
-| `CORS_ALLOWED_ORIGINS` | No | `http://localhost:5173` | Comma-separated frontend origins |
-| `OPENAI_BASE_URL` | No | `https://api.openai.com/v1` | OpenAI-compatible API base URL |
-| `OPENAI_CONNECT_TIMEOUT` | No | `5s` | OpenAI connection timeout |
-| `OPENAI_READ_TIMEOUT` | No | `60s` | OpenAI response timeout |
-| `SHOW_SQL` | No | `false` | Print SQL statements while developing |
-
-If the frontend runs on a different port, update `CORS_ALLOWED_ORIGINS` before starting the backend.
-
-## Main workflow
-
-```text
-Create ticket
-→ upload questionnaire
-→ extract and classify questions
-→ search approved knowledge
-→ route unresolved questions to SMEs
-→ approve final answers
-→ export the completed questionnaire
-```
-
-Supported questionnaire files:
-
-- `.xlsx`
-- `.docx`
-
-## Common endpoints
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/api/tickets` | List tickets |
-| `POST` | `/api/tickets` | Create a ticket |
-| `PATCH` | `/api/tickets/{id}/status` | Update ticket status |
-| `POST` | `/api/questionnaire/classify` | Parse and classify a file without saving it |
-| `POST` | `/api/questionnaire/import?ticketId={id}` | Parse, classify, and save questions |
-| `GET` | `/api/questions/ticket/{ticketId}` | List questions for a ticket |
-| `POST` | `/api/knowledge-base/search` | Search approved knowledge |
-| `POST` | `/api/final-answers` | Create or update a final answer |
-| `GET` | `/api/final-review/ticket/{ticketId}` | Load the final review data |
-| `GET` | `/api/export/ticket/{ticketId}` | Download the completed Excel file |
-
-Ticket statuses:
-
-```text
-New · AI Processing · Intake Review · In Progress · Waiting SME
-Ready for Review · Approved · Sent · Closed · Archived
-```
-
-Knowledge statuses:
-
-```text
-Draft · Pending Review · Approved · Deprecated · Archived
-```
-
-Only `Approved` knowledge entries are used for answer suggestions.
-
-## Demo data
-
-When the database tables are empty, `DataLoader` adds sample tickets, questions, SME requests, and knowledge entries. It also generates embeddings for knowledge entries that do not have one yet.
-
-This is useful for the demo, but keep it in mind when starting the app with a new database.
-
-## Tests
-
-Run the full test suite:
+## Checks
 
 ```bash
-./mvnw clean test
+./mvnw clean verify
 ```
 
-Build the deployable JAR:
+The tests cover search scoring, source links, review outcomes, reopened questions, empty states, file upload handling, and read compatibility. GitHub Actions runs the Maven checks on pushes and pull requests to `main`.
 
-```bash
-./mvnw clean package
-```
+## Demo data and current limits
 
-The JAR is written to `target/`.
+On an empty database, the application creates demo tickets, knowledge entries, SME requests, and eight demo AI review results: five accepted, two edited, and one escalated. They are only there to make the interface easier to explore.
 
-## Docker
-
-Build and run the image:
-
-```bash
-docker build -t customer-form-hub .
-docker run --rm -p 8080:8080 \
-  -e OPENAI_API_KEY="your-key" \
-  -e DB_URL="jdbc:mysql://host.docker.internal:3306/formhub" \
-  -e DB_USERNAME="root" \
-  -e DB_PASSWORD="your-password" \
-  customer-form-hub
-```
-
-## Project structure
-
-```text
-controller/   HTTP endpoints
-service/      workflow and business logic
-repository/   database access
-entity/       JPA database models
-dto/          API response and request objects
-config/       CORS, OpenAI client, error handling, and demo data
-```
+This project does not yet include a full login and permission system, database migrations with Flyway, a complete event history, or verified email delivery. Those are future improvements, not features being claimed here.

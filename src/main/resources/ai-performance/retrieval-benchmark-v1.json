@@ -1,0 +1,17 @@
+{
+  "version": "retrieval-v1-2026-08",
+  "cases": [
+    {"id":"encryption-at-rest","query":"How is customer data encrypted at rest?","expectedSourceIds":["information-security-policy-v3-2-encryption-of-data-at-rest"],"active":true},
+    {"id":"encryption-in-transit","query":"Which encryption standard protects data in transit?","expectedSourceIds":["information-security-policy-v3-2-encryption-of-data-in-transit"],"active":true},
+    {"id":"access-control","query":"How is access to production systems controlled?","expectedSourceIds":["information-security-policy-v3-2-access-control"],"active":true},
+    {"id":"disaster-recovery","query":"Do you maintain and test a disaster recovery plan?","expectedSourceIds":["information-security-policy-v3-2-disaster-recovery-and-business-continuity"],"active":true},
+    {"id":"incident-response","query":"Is there a documented incident response process?","expectedSourceIds":["information-security-policy-v3-2-incident-response"],"active":true},
+    {"id":"certifications","query":"Which security and privacy certifications does the company maintain?","expectedSourceIds":["compliance-and-certifications-summary-certifications-held"],"active":true},
+    {"id":"soc2-report","query":"Can customers request the latest SOC 2 Type II report?","expectedSourceIds":["compliance-and-certifications-summary-availability-of-reports"],"active":true},
+    {"id":"penetration-testing","query":"How often is independent penetration testing performed?","expectedSourceIds":["compliance-and-certifications-summary-penetration-testing"],"active":true},
+    {"id":"background-checks","query":"Are background checks completed for new employees?","expectedSourceIds":["hr-and-people-policy-v2-1-background-checks"],"active":true},
+    {"id":"security-training","query":"How often do employees complete security awareness training?","expectedSourceIds":["hr-and-people-policy-v2-1-training-and-awareness"],"active":true},
+    {"id":"offboarding","query":"When is a departing employee's system access removed?","expectedSourceIds":["hr-and-people-policy-v2-1-leavers-and-offboarding"],"active":true},
+    {"id":"payment-terms","query":"What are the standard customer invoice payment terms?","expectedSourceIds":["finance-and-tax-overview-payment-terms"],"active":true}
+  ]
+}

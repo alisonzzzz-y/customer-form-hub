@@ -103,6 +103,14 @@ export DB_PASSWORD="your-password"
 
 默认 API 地址是 `http://localhost:8080/api`。
 
+## 测试
+
+```bash
+./mvnw clean verify
+```
+
+测试覆盖检索评分、来源链接、审核结果、重新打开的问题、空状态、文件上传和兼容读取。同时也包含 MockMvc API 集成测试，验证工单状态更新、AI 建议升级给 AE、按部门分发 SME 请求，以及读取检索评估结果。这些接口测试使用独立的 H2 测试数据库，不会调用 OpenAI。GitHub Actions 会在推送到 `main` 或向 `main` 提交 PR 时运行 Maven 检查。
+
 ## 当前范围
 
 空数据库首次启动时，应用会生成演示工单、知识条目、SME 请求和 8 条演示 AI 审核结果：5 条直接接受、2 条编辑后接受、1 条升级处理。这些数据只用于帮助浏览界面。

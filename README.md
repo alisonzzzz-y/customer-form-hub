@@ -154,7 +154,7 @@ The API is available at `http://localhost:8080/api` by default. If that port is 
 ./mvnw clean verify
 ```
 
-The tests cover search scoring, source links, review outcomes, reopened questions, empty states, file upload handling, and read compatibility. GitHub Actions runs the Maven checks on pushes and pull requests to `main`.
+The tests cover search scoring, source links, review outcomes, reopened questions, empty states, file upload handling, and read compatibility. They also include MockMvc API integration tests for ticket status changes, AI-to-AE escalation, department-level SME dispatch, and retrieval evaluation results. These tests use an isolated H2 database and do not call OpenAI. GitHub Actions runs the Maven checks on pushes and pull requests to `main`.
 
 ## Demo data and current limits
 

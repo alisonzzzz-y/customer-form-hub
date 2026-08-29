@@ -5,8 +5,10 @@ import com.cloudera.customerformhub.repository.FormQuestionRepository;
 import com.cloudera.customerformhub.entity.SmeRequest;
 import com.cloudera.customerformhub.repository.SmeRequestRepository;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
+import com.cloudera.customerformhub.entity.RetrievalEvaluationRun;
 import com.cloudera.customerformhub.entity.Ticket;
 import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
+import com.cloudera.customerformhub.repository.RetrievalEvaluationRunRepository;
 import com.cloudera.customerformhub.repository.TicketRepository;
 import com.cloudera.customerformhub.service.EmbeddingService;
 import com.cloudera.customerformhub.service.TicketService;
@@ -31,12 +33,14 @@ public class DataLoader implements CommandLineRunner {
     private final TicketRepository ticketRepository;
     private final SmeRequestRepository smeRequestRepository;
     private final FormQuestionRepository formQuestionRepository;
+    private final RetrievalEvaluationRunRepository retrievalEvaluationRunRepository;
     private final boolean refreshDemoData;
     private final boolean rollingDemoDates;
 
     public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService,
                       TicketRepository ticketRepository, SmeRequestRepository smeRequestRepository,
                       FormQuestionRepository formQuestionRepository,
+                      RetrievalEvaluationRunRepository retrievalEvaluationRunRepository,
                       @Value("${demo-data.refresh:false}") boolean refreshDemoData,
                       @Value("${demo-data.rolling-dates:false}") boolean rollingDemoDates) {
         this.repository = repository;
@@ -44,6 +48,7 @@ public class DataLoader implements CommandLineRunner {
         this.ticketRepository = ticketRepository;
         this.smeRequestRepository = smeRequestRepository;
         this.formQuestionRepository = formQuestionRepository;
+        this.retrievalEvaluationRunRepository = retrievalEvaluationRunRepository;
         this.refreshDemoData = refreshDemoData;
         this.rollingDemoDates = rollingDemoDates;
     }
@@ -97,6 +102,7 @@ public class DataLoader implements CommandLineRunner {
         }
 
         seedDemoReviewOutcomes();
+        seedDemoRetrievalBaseline();
 
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
@@ -152,6 +158,35 @@ public class DataLoader implements CommandLineRunner {
         }
         formQuestionRepository.saveAll(demoQuestions);
         System.out.println(">>> DataLoader: seeded 8 synthetic AI review outcomes (5 accepted, 2 edited, 1 escalated).");
+    }
+
+    /**
+     * The public demo needs one visible benchmark result before a user runs an
+     * evaluation. This is deliberately synthetic and only exists when the
+     * rolling demo-data mode is enabled; a real completed run takes precedence
+     * as soon as one is recorded.
+     */
+    private void seedDemoRetrievalBaseline() {
+        if (!rollingDemoDates || retrievalEvaluationRunRepository.existsById("demo-retrieval-v1-baseline")) {
+            return;
+        }
+
+        LocalDateTime completedAt = LocalDateTime.now(ZoneOffset.UTC).minusMinutes(2);
+        RetrievalEvaluationRun baseline = new RetrievalEvaluationRun();
+        baseline.setId("demo-retrieval-v1-baseline");
+        baseline.setStatus("COMPLETED");
+        baseline.setStartedAt(completedAt.minusSeconds(2));
+        baseline.setCompletedAt(completedAt);
+        baseline.setDurationMs(1840L);
+        baseline.setDatasetVersion("retrieval-v1-synthetic-demo");
+        baseline.setDatasetHash("synthetic-demo-baseline");
+        baseline.setCaseCount(12);
+        baseline.setFailedCount(0);
+        baseline.setSkippedCount(0);
+        baseline.setTop1Hits(10);
+        baseline.setTop3Hits(12);
+        retrievalEvaluationRunRepository.save(baseline);
+        System.out.println(">>> DataLoader: seeded one synthetic retrieval baseline for the public demo.");
     }
 
     private void backfillTicketStatuses() {

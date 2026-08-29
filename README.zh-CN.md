@@ -29,7 +29,16 @@ React 前端提供主要工作台、知识库页面、报告页，以及给 Mana
 
 ## 部署
 
-在线演示使用 Railway 托管的 MySQL 数据库。本地开发时，可以通过下方环境变量连接任意 MySQL 8 或更高版本的数据库。
+在线演示由四个小型服务组成：
+
+| 部分 | 服务 | 作用 |
+|---|---|---|
+| 前端 | Vercel | 托管 React 应用 |
+| 后端 API | Render | 运行 Spring Boot API 和文档处理流程 |
+| 数据库 | Railway MySQL | 保存工单、问题、知识条目和审核数据 |
+| AI 服务 | OpenAI API | 对问题分类，并为知识搜索创建 embedding |
+
+本地开发时，可以通过下方环境变量连接任意 MySQL 8 或更高版本的数据库。
 
 [打开在线演示](https://customer-form-hub.vercel.app/)
 

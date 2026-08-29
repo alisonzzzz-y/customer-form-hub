@@ -30,7 +30,16 @@ The React frontend provides the main workspace, knowledge-base screens, reports,
 
 ## Deployment
 
-The deployed demo uses a MySQL database hosted on Railway. Local development can use any MySQL 8 or later database through the environment variables shown below.
+The deployed demo is split into four small services:
+
+| Part | Service | Responsibility |
+|---|---|---|
+| Frontend | Vercel | Hosts the React application |
+| Backend API | Render | Runs this Spring Boot API and document workflow |
+| Database | Railway MySQL | Stores tickets, questions, knowledge entries, and review data |
+| AI services | OpenAI API | Classifies questions and creates embeddings for knowledge search |
+
+Local development can use any MySQL 8 or later database through the environment variables shown below.
 
 [Open the live demo](https://customer-form-hub.vercel.app/)
 

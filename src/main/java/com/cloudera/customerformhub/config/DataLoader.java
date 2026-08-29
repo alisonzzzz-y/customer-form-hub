@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 import org.springframework.core.annotation.Order;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -31,17 +32,20 @@ public class DataLoader implements CommandLineRunner {
     private final SmeRequestRepository smeRequestRepository;
     private final FormQuestionRepository formQuestionRepository;
     private final boolean refreshDemoData;
+    private final boolean rollingDemoDates;
 
     public DataLoader(KnowledgeBaseRepository repository, EmbeddingService embeddingService,
                       TicketRepository ticketRepository, SmeRequestRepository smeRequestRepository,
                       FormQuestionRepository formQuestionRepository,
-                      @Value("${demo-data.refresh:false}") boolean refreshDemoData) {
+                      @Value("${demo-data.refresh:false}") boolean refreshDemoData,
+                      @Value("${demo-data.rolling-dates:false}") boolean rollingDemoDates) {
         this.repository = repository;
         this.embeddingService = embeddingService;
         this.ticketRepository = ticketRepository;
         this.smeRequestRepository = smeRequestRepository;
         this.formQuestionRepository = formQuestionRepository;
         this.refreshDemoData = refreshDemoData;
+        this.rollingDemoDates = rollingDemoDates;
     }
 
     private LocalDateTime demoDate(int daysFromToday) {
@@ -88,7 +92,7 @@ public class DataLoader implements CommandLineRunner {
             }
         }
 
-        if (refreshDemoData) {
+        if (refreshDemoData || rollingDemoDates) {
             refreshDemoData();
         }
 
@@ -96,6 +100,17 @@ public class DataLoader implements CommandLineRunner {
 
         // Generate embeddings for chunks without one (existing ones are skipped)
         embeddingService.generateEmbeddingsForAll();
+    }
+
+    /**
+     * Keeps the public demo useful after it has been deployed for a while.
+     * This is disabled unless DEMO_DATA_ROLLING_DATES is explicitly enabled.
+     */
+    @Scheduled(cron = "${demo-data.rolling-cron:0 5 0 * * *}", zone = "UTC")
+    public void refreshRollingDemoDates() {
+        if (rollingDemoDates) {
+            refreshDemoData();
+        }
     }
 
     /**
@@ -217,7 +232,7 @@ public class DataLoader implements CommandLineRunner {
     /**
      * One-time maintenance for a disposable demo database. It keeps ten active
      * tickets, with a small mix of due-today, overdue, and upcoming work, and
-     * marks all other demo records as closed. The property is off by default.
+     * marks all other demo records as closed. The related properties are off by default.
      */
     private void refreshDemoData() {
         LocalDateTime today = demoDate(0);

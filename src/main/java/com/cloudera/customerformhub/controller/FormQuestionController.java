@@ -3,6 +3,7 @@ package com.cloudera.customerformhub.controller;
 import com.cloudera.customerformhub.dto.SearchResult;
 import com.cloudera.customerformhub.dto.ReviewEscalationRequest;
 import com.cloudera.customerformhub.entity.FormQuestion;
+import com.cloudera.customerformhub.service.AnswerSupportService;
 import com.cloudera.customerformhub.service.FormQuestionService;
 import com.cloudera.customerformhub.service.RetrievalService;
 import com.cloudera.customerformhub.service.ReviewDecisionService;
@@ -19,12 +20,15 @@ public class FormQuestionController {
     private final FormQuestionService questionService;
     private final RetrievalService retrievalService;
     private final ReviewDecisionService reviewDecisionService;
+    private final AnswerSupportService answerSupportService;
 
     public FormQuestionController(FormQuestionService questionService, RetrievalService retrievalService,
-                                  ReviewDecisionService reviewDecisionService) {
+                                  ReviewDecisionService reviewDecisionService,
+                                  AnswerSupportService answerSupportService) {
         this.questionService = questionService;
         this.retrievalService = retrievalService;
         this.reviewDecisionService = reviewDecisionService;
+        this.answerSupportService = answerSupportService;
     }
 
     // GET /api/questions  → all questions
@@ -63,7 +67,8 @@ public class FormQuestionController {
         if (question == null) {
             return ResponseEntity.notFound().build();
         }
-        List<SearchResult> suggestions = retrievalService.search(question.getQuestionText());
+        List<SearchResult> suggestions = answerSupportService.assess(
+                question.getQuestionText(), retrievalService.search(question.getQuestionText()));
         return ResponseEntity.ok(suggestions);
     }
 

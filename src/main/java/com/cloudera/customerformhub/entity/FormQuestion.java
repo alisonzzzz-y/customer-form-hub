@@ -32,6 +32,14 @@ public class FormQuestion {
 
     private LocalDateTime createdAt;
 
+    // Who set the department: AI (classifier) or Manual (a reviewer moved it).
+    private String departmentSource;
+
+    // Set when a newer version of the customer form no longer contains this
+    // question. The row, its answer and SME links are kept, but it no longer
+    // counts as part of the ticket. Cleared if a later version brings it back.
+    private LocalDateTime retiredAt;
+
     @PrePersist
     public void prePersist() {
         if (this.status == null) this.status = "Needs Review";
@@ -91,4 +99,10 @@ public class FormQuestion {
     public void setAeClarificationRequestedAt(LocalDateTime aeClarificationRequestedAt) {
         this.aeClarificationRequestedAt = aeClarificationRequestedAt;
     }
+
+    public String getDepartmentSource() { return departmentSource; }
+    public void setDepartmentSource(String departmentSource) { this.departmentSource = departmentSource; }
+
+    public LocalDateTime getRetiredAt() { return retiredAt; }
+    public void setRetiredAt(LocalDateTime retiredAt) { this.retiredAt = retiredAt; }
 }

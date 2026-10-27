@@ -3,6 +3,7 @@ package com.cloudera.customerformhub.controller;
 import com.cloudera.customerformhub.dto.SearchRequest;
 import com.cloudera.customerformhub.dto.SearchResult;
 import com.cloudera.customerformhub.entity.KnowledgeBase;
+import com.cloudera.customerformhub.service.AnswerSupportService;
 import com.cloudera.customerformhub.service.KnowledgeBaseService;
 import com.cloudera.customerformhub.service.RetrievalService;
 import org.springframework.http.ResponseEntity;
@@ -17,11 +18,14 @@ public class KnowledgeBaseController {
     // constructor injection, controller needs service
     private final KnowledgeBaseService knowledgeBaseService;
     private final RetrievalService retrievalService;
+    private final AnswerSupportService answerSupportService;
 
     public KnowledgeBaseController(KnowledgeBaseService knowledgeBaseService,
-                                   RetrievalService retrievalService) {
+                                   RetrievalService retrievalService,
+                                   AnswerSupportService answerSupportService) {
         this.knowledgeBaseService = knowledgeBaseService;
         this.retrievalService = retrievalService;
+        this.answerSupportService = answerSupportService;
     }
 
     // GET /api/knowledge-base  → all chunks
@@ -49,7 +53,7 @@ public class KnowledgeBaseController {
     // POST /api/knowledge-base/search  → semantic search
     @PostMapping("/search")
     public List<SearchResult> search(@RequestBody SearchRequest request) {
-        return retrievalService.search(request.getQuestion());
+        return answerSupportService.assess(request.getQuestion(), retrievalService.search(request.getQuestion()));
     }
 
     // PUT /api/knowledge-base/{id}  → update a chunk (embedding regenerated automatically)

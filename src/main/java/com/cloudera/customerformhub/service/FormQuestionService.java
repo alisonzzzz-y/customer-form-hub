@@ -6,14 +6,18 @@ import com.cloudera.customerformhub.service.QuestionnaireParserService.ParsedQue
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 @Service
@@ -30,14 +34,14 @@ public class FormQuestionService {
         return repository.findAll();
     }
 
-    // Get all questions for one ticket
+    // Get the questions of one ticket's current form (retired versions left out)
     public List<FormQuestion> getQuestionsByTicket(Long ticketId) {
-        return repository.findByTicketId(ticketId);
+        return repository.findByTicketIdAndRetiredAtIsNull(ticketId);
     }
 
     // Get questions for one ticket in a specific department
     public List<FormQuestion> getQuestionsByTicketAndDepartment(Long ticketId, String department) {
-        return repository.findByTicketIdAndDepartment(ticketId, department);
+        return repository.findByTicketIdAndDepartmentAndRetiredAtIsNull(ticketId, department);
     }
 
     // Get one question by id (null if not found)
@@ -71,36 +75,71 @@ public class FormQuestionService {
         if (changes.getStatus() != null) existing.setStatus(changes.getStatus());
         if (changes.getRiskLevel() != null) existing.setRiskLevel(changes.getRiskLevel());
         if (changes.getRowReference() != null) existing.setRowReference(changes.getRowReference());
+        if (changes.getDepartmentSource() != null) existing.setDepartmentSource(changes.getDepartmentSource());
         // ticketId and createdAt are intentionally never overwritten
         return repository.save(existing);
     }
 
-    // Save parsed questionnaire rows under a ticket without duplicating rows that
-    // an earlier import of the same file already created. Matching rows are
-    // returned unchanged, so reviewer edits (department, status, answers) are
-    // never overwritten and nothing is deleted. Only new rows are classified.
-    // Identical questions inside one file are matched one-for-one, so a customer
-    // form that really repeats a question keeps both rows.
+    // Outcome of reconciling one customer form with the ticket's saved rows.
+    public record ImportResult(List<FormQuestion> questions, int added, int retired) {
+    }
+
+    // Save parsed questionnaire rows under a ticket without duplicating rows an
+    // earlier import already created. A row is matched by sheet/section and
+    // question text, one-for-one, so a form that really repeats a question keeps
+    // both rows. Matched rows are returned unchanged: reviewer edits, answers and
+    // SME links are never overwritten. Only new rows are classified.
+    //
+    // When the file is a different version (retireMissing = true), rows the new
+    // file no longer contains are retired, not deleted, and a retired row comes
+    // back if a later version contains it again. A question whose wording
+    // changed counts as removed + added, so an answer approved for the old
+    // wording is never silently attached to the new one.
     @Transactional
-    public List<FormQuestion> importParsedQuestions(Long ticketId, List<ParsedQuestion> parsed,
-                                                    Function<List<String>, List<String>> classifier) {
-        Map<String, Deque<FormQuestion>> existingByKey = new HashMap<>();
-        for (FormQuestion existing : repository.findByTicketId(ticketId)) {
-            existingByKey
+    public ImportResult importParsedQuestions(Long ticketId, List<ParsedQuestion> parsed,
+                                              Function<List<String>, List<String>> classifier,
+                                              boolean retireMissing) {
+        // Active rows are matched first, so a retired copy is only revived when
+        // the new file contains more copies of a question than are active.
+        List<FormQuestion> saved = new ArrayList<>(repository.findByTicketId(ticketId));
+        saved.sort(Comparator.comparing((FormQuestion q) -> q.getRetiredAt() != null)
+                .thenComparing(FormQuestion::getId));
+        Map<String, Deque<FormQuestion>> savedByKey = new HashMap<>();
+        for (FormQuestion existing : saved) {
+            savedByKey
                     .computeIfAbsent(importKey(existing.getRowReference(), existing.getQuestionText()),
                             key -> new ArrayDeque<>())
                     .add(existing);
         }
 
         FormQuestion[] result = new FormQuestion[parsed.size()];
+        Set<Long> matchedIds = new HashSet<>();
         List<Integer> newIndexes = new ArrayList<>();
         for (int i = 0; i < parsed.size(); i++) {
             ParsedQuestion q = parsed.get(i);
-            Deque<FormQuestion> matches = existingByKey.get(importKey(q.section(), q.questionText()));
+            Deque<FormQuestion> matches = savedByKey.get(importKey(q.section(), q.questionText()));
             if (matches != null && !matches.isEmpty()) {
-                result[i] = matches.poll();
+                FormQuestion match = matches.poll();
+                if (match.getRetiredAt() != null) {
+                    match.setRetiredAt(null);
+                    match = repository.save(match);
+                }
+                matchedIds.add(match.getId());
+                result[i] = match;
             } else {
                 newIndexes.add(i);
+            }
+        }
+
+        int retired = 0;
+        if (retireMissing) {
+            LocalDateTime now = LocalDateTime.now();
+            for (FormQuestion existing : saved) {
+                if (existing.getRetiredAt() == null && !matchedIds.contains(existing.getId())) {
+                    existing.setRetiredAt(now);
+                    repository.save(existing);
+                    retired++;
+                }
             }
         }
 
@@ -111,12 +150,14 @@ public class FormQuestionService {
                 int i = newIndexes.get(n);
                 ParsedQuestion q = parsed.get(i);
                 String dept = (n < departments.size()) ? departments.get(n) : "General";
-                result[i] = repository.save(new FormQuestion(
-                        ticketId, q.questionText(), dept, "Needs Review", null, q.section()));
+                FormQuestion created = new FormQuestion(
+                        ticketId, q.questionText(), dept, "Needs Review", null, q.section());
+                created.setDepartmentSource("AI");
+                result[i] = repository.save(created);
             }
         }
 
-        return Arrays.asList(result);
+        return new ImportResult(Arrays.asList(result), newIndexes.size(), retired);
     }
 
     // Case- and whitespace-insensitive identity of one questionnaire row.

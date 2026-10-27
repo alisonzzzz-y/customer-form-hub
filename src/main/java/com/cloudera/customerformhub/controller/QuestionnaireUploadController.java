@@ -6,13 +6,16 @@ import com.cloudera.customerformhub.service.QuestionnaireParserService;
 import com.cloudera.customerformhub.service.QuestionnaireParserService.ParsedQuestion;
 import com.cloudera.customerformhub.service.QuestionClassifierService;
 import com.cloudera.customerformhub.entity.FormQuestion;
-import com.cloudera.customerformhub.service.FormQuestionService;
+import com.cloudera.customerformhub.entity.Ticket;
+import com.cloudera.customerformhub.service.QuestionnaireImportService;
 import com.cloudera.customerformhub.service.TicketService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,18 +26,18 @@ public class QuestionnaireUploadController {
     private final QuestionnaireParserService parserService;
     private final DocxParserService docxParserService;
     private final QuestionClassifierService classifierService;
-    private final FormQuestionService formQuestionService;
+    private final QuestionnaireImportService importService;
     private final TicketService ticketService;
 
     public QuestionnaireUploadController(QuestionnaireParserService parserService,
                                          DocxParserService docxParserService,
                                          QuestionClassifierService classifierService,
-                                         FormQuestionService formQuestionService,
+                                         QuestionnaireImportService importService,
                                          TicketService ticketService) {
         this.parserService = parserService;
         this.docxParserService = docxParserService;
         this.classifierService = classifierService;
-        this.formQuestionService = formQuestionService;
+        this.importService = importService;
         this.ticketService = ticketService;
     }
 
@@ -71,17 +74,27 @@ public class QuestionnaireUploadController {
     }
 
     // POST /api/questionnaire/import?ticketId=2  → upload, parse, classify, and save to the ticket.
-    // Re-importing the same file is idempotent: rows already saved for this
-    // ticket are returned as they are instead of being inserted again.
+    // The file is always parsed. Submitting the same file again inserts nothing;
+    // a different file is reconciled as a new version of the form (see
+    // FormQuestionService.importParsedQuestions). The ticket records the file
+    // name, hash and outcome, which GET /api/tickets/{id} returns.
     @PostMapping("/import")
     public List<FormQuestion> importQuestions(@RequestParam("file") MultipartFile file,
                                               @RequestParam("ticketId") Long ticketId) {
-        if (ticketService.getTicketById(ticketId) == null) {
+        Ticket ticket = ticketService.getTicketById(ticketId);
+        if (ticket == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket " + ticketId + " does not exist.");
         }
 
         List<ParsedQuestion> parsed = parseAny(file);
-        return formQuestionService.importParsedQuestions(ticketId, parsed, classifierService::classify);
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return importService.importFile(ticket, file.getOriginalFilename(), bytes, parsed,
+                classifierService::classify);
     }
 
     // Parse either Excel or Word questionnaire files into the same ParsedQuestion shape.

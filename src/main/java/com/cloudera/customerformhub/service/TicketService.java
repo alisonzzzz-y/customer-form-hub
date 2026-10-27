@@ -16,6 +16,10 @@ public class TicketService {
             "Closed", "Archived"
     );
 
+    private static final Set<String> VALID_STAGES = Set.of(
+            "intake", "grouping", "review", "sme", "eta", "final", "done"
+    );
+
     private final TicketRepository repository;
 
     public TicketService(TicketRepository repository) {
@@ -32,6 +36,25 @@ public class TicketService {
     // Get one ticket by id (returns null if not found)
     public Ticket getTicketById(Long id) {
         return repository.findById(id).orElse(null);
+    }
+
+    // Create a ticket. A create that repeats an earlier clientRef (a retry after
+    // the first response was lost) returns the ticket already saved for it.
+    public Ticket createTicket(Ticket ticket) {
+        if (ticket.getClientRef() != null && !ticket.getClientRef().isBlank()) {
+            Ticket existing = repository.findByClientRef(ticket.getClientRef());
+            if (existing != null) return existing;
+        }
+        ticket.setId(null);
+        ticket.setWorkflowStage(normaliseStage(ticket.getWorkflowStage()));
+        // Form import details are written by the import only.
+        ticket.setFormFileName(null);
+        ticket.setFormFileHash(null);
+        ticket.setFormImportedAt(null);
+        ticket.setFormImportOutcome(null);
+        ticket.setFormQuestionsAdded(null);
+        ticket.setFormQuestionsRetired(null);
+        return saveTicket(ticket);
     }
 
     // Create or update a ticket
@@ -66,8 +89,17 @@ public class TicketService {
         if (changes.getDeadline() != null) existing.setDeadline(changes.getDeadline());
         if (changes.getBusinessImpact() != null) existing.setBusinessImpact(changes.getBusinessImpact());
         if (changes.getEta() != null) existing.setEta(changes.getEta());
+        if (changes.getWorkflowStage() != null) existing.setWorkflowStage(normaliseStage(changes.getWorkflowStage()));
         // createdAt is intentionally never overwritten
         return repository.save(existing);
+    }
+
+    static String normaliseStage(String stage) {
+        if (stage == null || stage.isBlank()) return null;
+        if (!VALID_STAGES.contains(stage)) {
+            throw new IllegalArgumentException("Invalid workflow stage: " + stage);
+        }
+        return stage;
     }
 
     public static String normaliseStatus(String status) {

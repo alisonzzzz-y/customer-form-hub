@@ -34,10 +34,10 @@ public class TicketController {
         return ResponseEntity.ok(ticket);
     }
 
-    // POST /api/tickets  → create a ticket
+    // POST /api/tickets  → create a ticket (a repeated clientRef returns the existing one)
     @PostMapping
     public Ticket createTicket(@RequestBody Ticket ticket) {
-        return ticketService.saveTicket(ticket);
+        return ticketService.createTicket(ticket);
     }
 
     // PUT /api/tickets/{id}  → update a ticket

@@ -34,7 +34,7 @@ public class DashboardService {
         DashboardStats stats = new DashboardStats();
 
         stats.setTotalTickets(ticketRepository.count());
-        stats.setTotalQuestions(questionRepository.count());
+        stats.setTotalQuestions(questionRepository.countByRetiredAtIsNull());
 
         // Ticket status buckets
         long closed = ticketRepository.findAll().stream()

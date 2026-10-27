@@ -18,10 +18,14 @@ public class SearchResult {
     private String department;
     private Boolean approved;
     private Double similarityScore; // cosine similarity to the question (0 to 1)
-    // How far the score supports using this passage as an answer:
-    // SUPPORTED / PARTIAL / RELATED. Similarity alone never proves the passage
-    // answers the question, so every level still needs human review.
+    // How close the passage is to the question, from the score alone:
+    // HIGH / MEDIUM / LOW. Relevance is not evidence.
+    private String relevanceLevel;
+    // Whether the passage supports an answer (AnswerSupportService):
+    // SUPPORTED / PARTIAL / RELATED. Every level still needs human review.
     private String supportLevel;
+    private String evidence;       // sentence from the passage that answers the question
+    private String supportReason;  // why this support level was given
 
     // Build a SearchResult from a KnowledgeBase entity (embedding is left out)
     public SearchResult(KnowledgeBase chunk) {
@@ -91,5 +95,29 @@ public class SearchResult {
 
     public void setSupportLevel(String supportLevel) {
         this.supportLevel = supportLevel;
+    }
+
+    public String getRelevanceLevel() {
+        return relevanceLevel;
+    }
+
+    public void setRelevanceLevel(String relevanceLevel) {
+        this.relevanceLevel = relevanceLevel;
+    }
+
+    public String getEvidence() {
+        return evidence;
+    }
+
+    public void setEvidence(String evidence) {
+        this.evidence = evidence;
+    }
+
+    public String getSupportReason() {
+        return supportReason;
+    }
+
+    public void setSupportReason(String supportReason) {
+        this.supportReason = supportReason;
     }
 }

@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 @Table(name = "sme_request")
 public class SmeRequest {
 
+    public static final String DRAFT_PREPARED = "Draft Prepared";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -22,17 +24,19 @@ public class SmeRequest {
     private Integer questionCount;
 
     private LocalDateTime eta;         // expected return time (full date-time, UTC)
-    private String status;             // Waiting for ETA / ETA Confirmed / Overdue / Returned
+    private String status;             // Draft Prepared / Waiting for ETA / ETA Confirmed / Overdue / Returned
     private String confirmedBy;        // who confirmed the ETA (optional)
 
-    private LocalDateTime sentAt;      // when the SME request was sent
+    // When the request was sent. The app only opens a mail draft, so for a
+    // "Draft Prepared" request this stays null until a user confirms the send.
+    private LocalDateTime sentAt;
     private LocalDateTime returnedAt;  // when the SME actually returned it (nullable)
 
     // Set defaults before the row is first saved
     @PrePersist
     public void prePersist() {
         if (this.status == null) this.status = "Waiting for ETA";
-        if (this.sentAt == null) this.sentAt = LocalDateTime.now();
+        if (this.sentAt == null && !DRAFT_PREPARED.equals(this.status)) this.sentAt = LocalDateTime.now();
     }
 
     // No-arg constructor (required by JPA)

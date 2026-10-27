@@ -7,7 +7,10 @@ import com.cloudera.customerformhub.service.QuestionnaireParserService.ParsedQue
 import com.cloudera.customerformhub.service.QuestionClassifierService;
 import com.cloudera.customerformhub.entity.FormQuestion;
 import com.cloudera.customerformhub.service.FormQuestionService;
+import com.cloudera.customerformhub.service.TicketService;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
@@ -21,15 +24,18 @@ public class QuestionnaireUploadController {
     private final DocxParserService docxParserService;
     private final QuestionClassifierService classifierService;
     private final FormQuestionService formQuestionService;
+    private final TicketService ticketService;
 
     public QuestionnaireUploadController(QuestionnaireParserService parserService,
                                          DocxParserService docxParserService,
                                          QuestionClassifierService classifierService,
-                                         FormQuestionService formQuestionService) {
+                                         FormQuestionService formQuestionService,
+                                         TicketService ticketService) {
         this.parserService = parserService;
         this.docxParserService = docxParserService;
         this.classifierService = classifierService;
         this.formQuestionService = formQuestionService;
+        this.ticketService = ticketService;
     }
 
     // POST /api/questionnaire/parse  → upload only, parse, no classification
@@ -64,38 +70,18 @@ public class QuestionnaireUploadController {
         return result;
     }
 
-    // POST /api/questionnaire/import?ticketId=2  → upload, parse, classify, and save to the ticket
+    // POST /api/questionnaire/import?ticketId=2  → upload, parse, classify, and save to the ticket.
+    // Re-importing the same file is idempotent: rows already saved for this
+    // ticket are returned as they are instead of being inserted again.
     @PostMapping("/import")
     public List<FormQuestion> importQuestions(@RequestParam("file") MultipartFile file,
                                               @RequestParam("ticketId") Long ticketId) {
-        // 1. Parse the questions out of the Excel
+        if (ticketService.getTicketById(ticketId) == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Ticket " + ticketId + " does not exist.");
+        }
+
         List<ParsedQuestion> parsed = parseAny(file);
-
-        // 2. Classify all questions in one LLM call
-        List<String> questionTexts = new ArrayList<>();
-        for (ParsedQuestion q : parsed) {
-            questionTexts.add(q.questionText());
-        }
-        List<String> departments = classifierService.classify(questionTexts);
-
-        // 3. Turn each into a FormQuestion and save it under this ticket
-        List<FormQuestion> saved = new ArrayList<>();
-        for (int i = 0; i < parsed.size(); i++) {
-            ParsedQuestion q = parsed.get(i);
-            String dept = (i < departments.size()) ? departments.get(i) : "General";
-
-            FormQuestion fq = new FormQuestion(
-                    ticketId,               // which ticket
-                    q.questionText(),       // question text
-                    dept,                   // department from the LLM
-                    "Needs Review",         // initial status
-                    null,                   // riskLevel (not set yet)
-                    q.section()             // use the questionnaire section as rowReference
-            );
-            saved.add(formQuestionService.saveQuestion(fq));
-        }
-
-        return saved;
+        return formQuestionService.importParsedQuestions(ticketId, parsed, classifierService::classify);
     }
 
     // Parse either Excel or Word questionnaire files into the same ParsedQuestion shape.

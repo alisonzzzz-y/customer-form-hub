@@ -116,7 +116,9 @@ public class SmeRequestService {
         if (changes.getStatus() != null) existing.setStatus(changes.getStatus());
         if (changes.getConfirmedBy() != null) existing.setConfirmedBy(changes.getConfirmedBy());
         if (changes.getReturnedAt() != null) existing.setReturnedAt(changes.getReturnedAt());
-        // ticketId and sentAt are intentionally never overwritten
+        // sentAt is recorded once, when a user confirms a prepared draft was sent;
+        // ticketId and an existing sentAt are intentionally never overwritten
+        if (changes.getSentAt() != null && existing.getSentAt() == null) existing.setSentAt(changes.getSentAt());
         return repository.save(existing);
     }
 

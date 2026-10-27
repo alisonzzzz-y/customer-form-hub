@@ -23,7 +23,7 @@ public class FinalReviewService {
 
     // Build the full review for a ticket: every question with its final answer (if any)
     public List<QuestionWithAnswer> getReviewForTicket(Long ticketId) {
-        List<FormQuestion> questions = questionRepository.findByTicketId(ticketId);
+        List<FormQuestion> questions = questionRepository.findByTicketIdAndRetiredAtIsNull(ticketId);
 
         return questions.stream()
                 .map(this::toQuestionWithAnswer)

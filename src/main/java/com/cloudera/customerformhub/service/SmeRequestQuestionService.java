@@ -64,7 +64,7 @@ public class SmeRequestQuestionService {
 
         // 2. Find this ticket's questions in this department that need SME input
         List<FormQuestion> deptQuestions =
-                formQuestionRepository.findByTicketIdAndDepartment(ticketId, department);
+                formQuestionRepository.findByTicketIdAndDepartmentAndRetiredAtIsNull(ticketId, department);
 
         // 3. Create a link record only for questions not linked yet
         return deptQuestions.stream()

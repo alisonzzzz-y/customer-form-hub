@@ -1,9 +1,11 @@
 package com.cloudera.customerformhub;
 
 import com.cloudera.customerformhub.config.DataLoader;
+import com.cloudera.customerformhub.entity.FinalAnswer;
 import com.cloudera.customerformhub.entity.FormQuestion;
 import com.cloudera.customerformhub.entity.RetrievalEvaluationRun;
 import com.cloudera.customerformhub.entity.Ticket;
+import com.cloudera.customerformhub.repository.FinalAnswerRepository;
 import com.cloudera.customerformhub.repository.FormQuestionRepository;
 import com.cloudera.customerformhub.repository.RetrievalEvaluationRunRepository;
 import com.cloudera.customerformhub.repository.SmeRequestQuestionRepository;
@@ -73,6 +75,9 @@ class ApiIntegrationTest {
     @Autowired
     private RetrievalEvaluationRunRepository evaluationRunRepository;
 
+    @Autowired
+    private FinalAnswerRepository finalAnswerRepository;
+
     @MockitoBean
     private DataLoader dataLoader;
 
@@ -81,6 +86,7 @@ class ApiIntegrationTest {
 
     @BeforeEach
     void clearDatabase() {
+        finalAnswerRepository.deleteAll();
         smeRequestQuestionRepository.deleteAll();
         smeRequestRepository.deleteAll();
         questionRepository.deleteAll();
@@ -266,6 +272,110 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void recordsWhichFileWasImportedAndTreatsTheSameFileAsARepeat() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Vandelay Industries", "Intake Review"));
+        classifyAllAs("InfoSec");
+        MockMultipartFile file = demoWorkbook();
+
+        String first = importFile(ticket, file);
+        mockMvc.perform(get("/api/tickets/{id}", ticket.getId()))
+                .andExpect(jsonPath("$.formFileName").value("Vandelay_Industries_Demo_Questionnaire.xlsx"))
+                .andExpect(jsonPath("$.formImportOutcome").value("CREATED"))
+                .andExpect(jsonPath("$.formQuestionsAdded").value(16))
+                .andExpect(jsonPath("$.formQuestionsRetired").value(0));
+
+        String second = importFile(ticket, file);
+        assertEquals(idsOf(first), idsOf(second));
+        mockMvc.perform(get("/api/tickets/{id}", ticket.getId()))
+                .andExpect(jsonPath("$.formImportOutcome").value("UNCHANGED"))
+                .andExpect(jsonPath("$.formQuestionsAdded").value(0));
+        mockMvc.perform(get("/api/questions/ticket/{id}", ticket.getId()))
+                .andExpect(jsonPath("$", hasSize(16)))
+                .andExpect(jsonPath("$[0].departmentSource").value("AI"));
+    }
+
+    @Test
+    void aNewVersionOfTheFormIsParsedAndKeepsReviewedAnswers() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Version Co", "In Progress"));
+        classifyAllAs("InfoSec");
+        String v1 = importFile(ticket, workbook(new String[][] {
+                {"InfoSec", "Is data encrypted in transit?", "Do you hold ISO 27001?", "Do you run penetration tests?"}
+        }, "form-v1.xlsx"));
+        List<Long> v1Ids = idsOf(v1);
+        long encrypted = v1Ids.get(0);
+        long iso = v1Ids.get(1);
+
+        // Both questions were reviewed: one stays in v2, the other was dropped.
+        finalAnswerRepository.save(new FinalAnswer(encrypted, null, "TLS 1.2+", false, "Knowledge Base", "Confirmed", "Sarah Chen"));
+        finalAnswerRepository.save(new FinalAnswer(iso, null, "Yes, certified.", false, "Knowledge Base", "Confirmed", "Sarah Chen"));
+        mockMvc.perform(put("/api/questions/{id}", encrypted)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"department\":\"Compliance\",\"departmentSource\":\"Manual\"}"))
+                .andExpect(status().isOk());
+
+        String v2 = importFile(ticket, workbook(new String[][] {
+                {"InfoSec", "Is data encrypted in transit?", "Do you run penetration tests?", "Is MFA enforced for admins?"}
+        }, "form-v2.xlsx"));
+
+        List<Long> v2Ids = idsOf(v2);
+        assertEquals(3, v2Ids.size());
+        assertEquals(encrypted, v2Ids.get(0));      // same row, not re-created
+        assertEquals(v1Ids.get(2), v2Ids.get(1));
+        mockMvc.perform(get("/api/tickets/{id}", ticket.getId()))
+                .andExpect(jsonPath("$.formFileName").value("form-v2.xlsx"))
+                .andExpect(jsonPath("$.formImportOutcome").value("UPDATED"))
+                .andExpect(jsonPath("$.formQuestionsAdded").value(1))
+                .andExpect(jsonPath("$.formQuestionsRetired").value(1));
+        mockMvc.perform(get("/api/questions/ticket/{id}", ticket.getId()))
+                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$[0].department").value("Compliance"))
+                .andExpect(jsonPath("$[0].departmentSource").value("Manual"));
+        // The approved answers are untouched; the dropped question is retired, not deleted.
+        assertEquals("TLS 1.2+", finalAnswerRepository.findByQuestionId(encrypted).get(0).getAnswerText());
+        assertEquals("Yes, certified.", finalAnswerRepository.findByQuestionId(iso).get(0).getAnswerText());
+        assertEquals(true, questionRepository.findById(iso).orElseThrow().getRetiredAt() != null);
+        mockMvc.perform(get("/api/final-review/ticket/{id}", ticket.getId()))
+                .andExpect(jsonPath("$", hasSize(3)));
+
+        // Going back to v1 brings the retired question back with its answer.
+        String v1Again = importFile(ticket, workbook(new String[][] {
+                {"InfoSec", "Is data encrypted in transit?", "Do you hold ISO 27001?", "Do you run penetration tests?"}
+        }, "form-v1.xlsx"));
+        assertEquals(v1Ids, idsOf(v1Again));
+        assertEquals(null, questionRepository.findById(iso).orElseThrow().getRetiredAt());
+    }
+
+    @Test
+    void aRetriedCreateWithTheSameClientRefReturnsTheSameTicket() throws Exception {
+        String body = "{\"customerName\":\"Retry Co\",\"status\":\"Intake Review\",\"clientRef\":\"tab-7f3a-1\"}";
+        String first = mockMvc.perform(post("/api/tickets").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String second = mockMvc.perform(post("/api/tickets").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+        com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertEquals(json.readTree(first).get("id").asLong(), json.readTree(second).get("id").asLong());
+        assertEquals(1, ticketRepository.count());
+    }
+
+    @Test
+    void savesTheWorkflowStepAndRejectsUnknownOnes() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Stage Co", "In Progress"));
+
+        mockMvc.perform(put("/api/tickets/{id}", ticket.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowStage\":\"grouping\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workflowStage").value("grouping"));
+        mockMvc.perform(put("/api/tickets/{id}", ticket.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workflowStage\":\"somewhere\"}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/tickets/{id}", ticket.getId()))
+                .andExpect(jsonPath("$.workflowStage").value("grouping"));
+    }
+
+    @Test
     void preparedSmeDraftIsNotSentUntilAUserConfirmsIt() throws Exception {
         Ticket ticket = ticketRepository.save(ticket("Draft Co", "In Progress"));
 
@@ -293,6 +403,18 @@ class ApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sentAt").value("2026-10-27T10:15:00"))
                 .andExpect(jsonPath("$.eta").value("2026-11-03T17:00:00"));
+    }
+
+    private String importFile(Ticket ticket, MockMultipartFile file) throws Exception {
+        return mockMvc.perform(multipart("/api/questionnaire/import").file(file)
+                        .param("ticketId", ticket.getId().toString()))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+    }
+
+    private void classifyAllAs(String department) {
+        when(classifierService.classify(anyList()))
+                .thenAnswer(inv -> Collections.nCopies(((List<?>) inv.getArgument(0)).size(), department));
     }
 
     private List<Long> idsOf(String json) throws Exception {
@@ -325,6 +447,10 @@ class ApiIntegrationTest {
 
     // Each row of `sheets` is {sheetName, question...}; a blank row is added to check it is skipped.
     private MockMultipartFile workbook(String[][] sheets) throws Exception {
+        return workbook(sheets, "Vandelay_Industries_Demo_Questionnaire.xlsx");
+    }
+
+    private MockMultipartFile workbook(String[][] sheets, String fileName) throws Exception {
         try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             for (String[] spec : sheets) {
                 Sheet sheet = wb.createSheet(spec[0]);
@@ -340,7 +466,7 @@ class ApiIntegrationTest {
                 sheet.createRow(spec.length).createCell(1).setCellValue(" ");
             }
             wb.write(out);
-            return new MockMultipartFile("file", "Vandelay_Industries_Demo_Questionnaire.xlsx",
+            return new MockMultipartFile("file", fileName,
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
         }
     }

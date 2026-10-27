@@ -58,7 +58,7 @@ public class SmeRequestService {
 
     // Dispatch all SME Needed questions for one ticket into department-level SME requests
     public List<SmeRequest> dispatchForTicket(Long ticketId) {
-        List<FormQuestion> questions = questionRepository.findByTicketId(ticketId);
+        List<FormQuestion> questions = questionRepository.findByTicketIdAndRetiredAtIsNull(ticketId);
 
         Set<String> departments = new LinkedHashSet<>();
         Map<String, Integer> questionCounts = new LinkedHashMap<>();

@@ -9,19 +9,37 @@ import com.cloudera.customerformhub.repository.RetrievalEvaluationRunRepository;
 import com.cloudera.customerformhub.repository.SmeRequestQuestionRepository;
 import com.cloudera.customerformhub.repository.SmeRequestRepository;
 import com.cloudera.customerformhub.repository.TicketRepository;
+import com.cloudera.customerformhub.service.QuestionClassifierService;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -57,6 +75,9 @@ class ApiIntegrationTest {
 
     @MockitoBean
     private DataLoader dataLoader;
+
+    @MockitoBean
+    private QuestionClassifierService classifierService;
 
     @BeforeEach
     void clearDatabase() {
@@ -175,6 +196,153 @@ class ApiIntegrationTest {
         mockMvc.perform(get("/api/ai-performance/retrieval-runs").param("limit", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("limit must be between 1 and 100"));
+    }
+
+    @Test
+    void importsEveryQuestionFromAMultiSheetWorkbookExactlyOnce() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Vandelay Industries", "Intake Review"));
+        when(classifierService.classify(anyList()))
+                .thenAnswer(inv -> Collections.nCopies(((List<?>) inv.getArgument(0)).size(), "InfoSec"));
+        MockMultipartFile file = demoWorkbook();
+
+        String first = mockMvc.perform(multipart("/api/questionnaire/import").file(file)
+                        .param("ticketId", ticket.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(16)))
+                .andExpect(jsonPath("$[0].rowReference").value("InfoSec"))
+                .andExpect(jsonPath("$[15].rowReference").value("ESG"))
+                .andReturn().getResponse().getContentAsString();
+        assertEquals(16, questionRepository.findByTicketId(ticket.getId()).size());
+
+        // A reviewer moves one question before the same file is analysed again.
+        long movedId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(first).get(0).get("id").asLong();
+        mockMvc.perform(put("/api/questions/{id}", movedId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"department\":\"Compliance\"}"))
+                .andExpect(status().isOk());
+
+        String second = mockMvc.perform(multipart("/api/questionnaire/import").file(file)
+                        .param("ticketId", ticket.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(16)))
+                .andExpect(jsonPath("$[0].department").value("Compliance"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertEquals(16, questionRepository.findByTicketId(ticket.getId()).size());
+        assertEquals(idsOf(first), idsOf(second));
+        // Only the first import needed the classifier: nothing new was found the second time.
+        verify(classifierService, times(1)).classify(anyList());
+    }
+
+    @Test
+    void keepsQuestionsThatTheCustomerFormGenuinelyRepeats() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Repeat Co", "Intake Review"));
+        when(classifierService.classify(anyList()))
+                .thenAnswer(inv -> Collections.nCopies(((List<?>) inv.getArgument(0)).size(), "InfoSec"));
+        MockMultipartFile file = workbook(new String[][] {
+                {"InfoSec", "Is data encrypted in transit?", "Is data encrypted in transit?", "Do you hold ISO 27001?"}
+        });
+
+        mockMvc.perform(multipart("/api/questionnaire/import").file(file)
+                        .param("ticketId", ticket.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)));
+        mockMvc.perform(multipart("/api/questionnaire/import").file(file)
+                        .param("ticketId", ticket.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(3)));
+
+        assertEquals(3, questionRepository.findByTicketId(ticket.getId()).size());
+    }
+
+    @Test
+    void rejectsAnImportForATicketThatDoesNotExist() throws Exception {
+        mockMvc.perform(multipart("/api/questionnaire/import").file(demoWorkbook())
+                        .param("ticketId", "999999"))
+                .andExpect(status().isNotFound());
+
+        verify(classifierService, never()).classify(anyList());
+        assertEquals(0, questionRepository.count());
+    }
+
+    @Test
+    void preparedSmeDraftIsNotSentUntilAUserConfirmsIt() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Draft Co", "In Progress"));
+
+        String created = mockMvc.perform(post("/api/sme-requests")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketId\":" + ticket.getId()
+                                + ",\"department\":\"Finance\",\"status\":\"Draft Prepared\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("Draft Prepared"))
+                .andExpect(jsonPath("$.sentAt").value(nullValue()))
+                .andReturn().getResponse().getContentAsString();
+        long requestId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(created).get("id").asLong();
+
+        mockMvc.perform(put("/api/sme-requests/{id}", requestId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"Waiting for ETA\",\"sentAt\":\"2026-10-27T10:15:00\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("Waiting for ETA"))
+                .andExpect(jsonPath("$.sentAt").value("2026-10-27T10:15:00"));
+
+        // A second confirmation cannot rewrite when the request was first sent.
+        mockMvc.perform(put("/api/sme-requests/{id}", requestId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sentAt\":\"2026-10-28T09:00:00\",\"eta\":\"2026-11-03T17:00:00\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sentAt").value("2026-10-27T10:15:00"))
+                .andExpect(jsonPath("$.eta").value("2026-11-03T17:00:00"));
+    }
+
+    private List<Long> idsOf(String json) throws Exception {
+        List<Long> ids = new ArrayList<>();
+        new com.fasterxml.jackson.databind.ObjectMapper().readTree(json).forEach(n -> ids.add(n.get("id").asLong()));
+        return ids;
+    }
+
+    // Same shape as Vandelay_Industries_Demo_Questionnaire.xlsx: five sheets, 16 questions.
+    private MockMultipartFile demoWorkbook() throws Exception {
+        return workbook(new String[][] {
+                {"InfoSec", "Do you currently hold ISO/IEC 27001 certification?",
+                        "Describe how customer data is encrypted in transit and at rest.",
+                        "What is your process for detecting, reporting, and responding to security incidents?",
+                        "How is employee access to customer data granted, reviewed, and revoked?",
+                        "Do you carry out regular penetration tests or vulnerability assessments?",
+                        "How long are security event logs retained, and who can access them?"},
+                {"Legal", "Is a standard Data Processing Agreement (DPA) available for customers?",
+                        "In which regions can customer data be stored or processed?",
+                        "What is your policy for retaining and deleting customer data after contract termination?",
+                        "How are customers notified when you add or change a subprocessor?"},
+                {"Finance", "Do you maintain cyber liability insurance, and what is the coverage limit?",
+                        "Can you provide your most recent audited financial statements under a suitable NDA?"},
+                {"HR", "Do employees complete information security awareness training at least once a year?",
+                        "What was your employee turnover rate during the last financial year?"},
+                {"ESG", "Do you publish an annual sustainability or environmental performance report?",
+                        "Do you measure and report Scope 1 and Scope 2 greenhouse gas emissions?"},
+        });
+    }
+
+    // Each row of `sheets` is {sheetName, question...}; a blank row is added to check it is skipped.
+    private MockMultipartFile workbook(String[][] sheets) throws Exception {
+        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            for (String[] spec : sheets) {
+                Sheet sheet = wb.createSheet(spec[0]);
+                Row header = sheet.createRow(0);
+                header.createCell(0).setCellValue("Question ID");
+                header.createCell(1).setCellValue("Question");
+                header.createCell(2).setCellValue("Supplier Answer");
+                for (int i = 1; i < spec.length; i++) {
+                    Row row = sheet.createRow(i);
+                    row.createCell(0).setCellValue(String.format("Q%02d", i));
+                    row.createCell(1).setCellValue(spec[i]);
+                }
+                sheet.createRow(spec.length).createCell(1).setCellValue(" ");
+            }
+            wb.write(out);
+            return new MockMultipartFile("file", "Vandelay_Industries_Demo_Questionnaire.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+        }
     }
 
     private Ticket ticket(String customerName, String status) {

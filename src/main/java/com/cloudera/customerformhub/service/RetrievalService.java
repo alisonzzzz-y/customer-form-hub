@@ -16,7 +16,12 @@ public class RetrievalService {
     private final EmbeddingService embeddingService;
     private final KnowledgeBaseRepository repository;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    // Minimum score for a chunk to be shown at all, as related knowledge.
     private static final double SIMILARITY_THRESHOLD = 0.35;
+    // Scores at or above these levels may be offered as a draft answer. Below
+    // PARTIAL the chunk is only related knowledge, not a supported answer.
+    static final double SUPPORTED_THRESHOLD = 0.60;
+    static final double PARTIAL_THRESHOLD = 0.50;
 
     public RetrievalService(EmbeddingService embeddingService, KnowledgeBaseRepository repository) {
         this.embeddingService = embeddingService;
@@ -53,9 +58,16 @@ public class RetrievalService {
                 .map(scored -> {
                     SearchResult result = new SearchResult(scored.chunk());
                     result.setSimilarityScore(scored.score());
+                    result.setSupportLevel(supportLevel(scored.score()));
                     return result;
                 })
                 .toList();
+    }
+
+    static String supportLevel(double score) {
+        if (score >= SUPPORTED_THRESHOLD) return "SUPPORTED";
+        if (score >= PARTIAL_THRESHOLD) return "PARTIAL";
+        return "RELATED";
     }
 
     // Convert the stored JSON text back into a vector.

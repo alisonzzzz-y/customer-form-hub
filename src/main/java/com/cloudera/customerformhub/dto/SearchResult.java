@@ -18,6 +18,10 @@ public class SearchResult {
     private String department;
     private Boolean approved;
     private Double similarityScore; // cosine similarity to the question (0 to 1)
+    // How far the score supports using this passage as an answer:
+    // SUPPORTED / PARTIAL / RELATED. Similarity alone never proves the passage
+    // answers the question, so every level still needs human review.
+    private String supportLevel;
 
     // Build a SearchResult from a KnowledgeBase entity (embedding is left out)
     public SearchResult(KnowledgeBase chunk) {
@@ -79,5 +83,13 @@ public class SearchResult {
     // Setter so the retrieval service can fill in the score after construction
     public void setSimilarityScore(Double similarityScore) {
         this.similarityScore = similarityScore;
+    }
+
+    public String getSupportLevel() {
+        return supportLevel;
+    }
+
+    public void setSupportLevel(String supportLevel) {
+        this.supportLevel = supportLevel;
     }
 }

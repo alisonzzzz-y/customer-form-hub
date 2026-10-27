@@ -346,6 +346,30 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void aFileWithNoQuestionsIsRejectedAndKeepsTheSavedQuestions() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Empty Co", "In Progress"));
+        classifyAllAs("InfoSec");
+        List<Long> saved = idsOf(importFile(ticket, workbook(new String[][] {
+                {"InfoSec", "Is data encrypted in transit?", "Do you hold ISO 27001?"}
+        }, "form-v1.xlsx")));
+        finalAnswerRepository.save(new FinalAnswer(saved.get(0), null, "TLS 1.2+", false, "Knowledge Base", "Confirmed", "Sarah Chen"));
+
+        // Only the "Question" header, no rows.
+        mockMvc.perform(multipart("/api/questionnaire/import")
+                        .file(workbook(new String[][] {{"InfoSec"}}, "empty.xlsx"))
+                        .param("ticketId", ticket.getId().toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("not changed")));
+
+        mockMvc.perform(get("/api/questions/ticket/{id}", ticket.getId()))
+                .andExpect(jsonPath("$", hasSize(2)));
+        assertEquals(null, questionRepository.findById(saved.get(0)).orElseThrow().getRetiredAt());
+        mockMvc.perform(get("/api/tickets/{id}", ticket.getId()))
+                .andExpect(jsonPath("$.formFileName").value("form-v1.xlsx"))
+                .andExpect(jsonPath("$.formImportOutcome").value("CREATED"));
+    }
+
+    @Test
     void aRetriedCreateWithTheSameClientRefReturnsTheSameTicket() throws Exception {
         String body = "{\"customerName\":\"Retry Co\",\"status\":\"Intake Review\",\"clientRef\":\"tab-7f3a-1\"}";
         String first = mockMvc.perform(post("/api/tickets").contentType(MediaType.APPLICATION_JSON).content(body))

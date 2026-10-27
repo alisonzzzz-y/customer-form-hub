@@ -95,10 +95,17 @@ public class FormQuestionService {
     // back if a later version contains it again. A question whose wording
     // changed counts as removed + added, so an answer approved for the old
     // wording is never silently attached to the new one.
+    //
+    // A file that yields no questions is rejected before anything is changed:
+    // treating it as a new version would retire every saved question.
     @Transactional
     public ImportResult importParsedQuestions(Long ticketId, List<ParsedQuestion> parsed,
                                               Function<List<String>, List<String>> classifier,
                                               boolean retireMissing) {
+        if (parsed.isEmpty()) {
+            throw new IllegalArgumentException("No questions were found in this file. Check that the sheet "
+                    + "has a \"Question\" column with filled rows. The ticket's saved questions were not changed.");
+        }
         // Active rows are matched first, so a retired copy is only revived when
         // the new file contains more copies of a question than are active.
         List<FormQuestion> saved = new ArrayList<>(repository.findByTicketId(ticketId));

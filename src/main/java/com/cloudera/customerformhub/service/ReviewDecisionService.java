@@ -2,6 +2,7 @@ package com.cloudera.customerformhub.service;
 
 import com.cloudera.customerformhub.entity.FormQuestion;
 import com.cloudera.customerformhub.repository.FormQuestionRepository;
+import com.cloudera.customerformhub.repository.FinalAnswerRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,7 +14,10 @@ public class ReviewDecisionService {
 
     private final FormQuestionRepository questionRepository;
 
-    public ReviewDecisionService(FormQuestionRepository questionRepository) {
+    private final FinalAnswerRepository answers;
+
+    public ReviewDecisionService(FormQuestionRepository questionRepository, FinalAnswerRepository answers) {
+        this.answers = answers;
         this.questionRepository = questionRepository;
     }
 
@@ -25,6 +29,9 @@ public class ReviewDecisionService {
         String normalisedType = type == null ? "" : type.trim().toUpperCase();
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         if ("SME".equals(normalisedType)) {
+            if (!QuestionDepartments.isAssigned(question.getDepartment())) {
+                throw new IllegalArgumentException("Assign an owning department in Grouping before routing to SME");
+            }
             question.setStatus("SME Needed");
         } else if ("AE".equals(normalisedType)) {
             question.setStatus("Waiting AE");
@@ -43,6 +50,10 @@ public class ReviewDecisionService {
     public FormQuestion reopen(Long questionId) {
         FormQuestion question = questionRepository.findById(questionId).orElse(null);
         if (question == null) return null;
+        for (var answer : answers.findByQuestionId(questionId)) {
+            answer.setApprovalStatus("Draft");
+            answers.save(answer);
+        }
         question.setStatus("Needs Review");
         question.setReviewOutcome(null);
         question.setReviewedAt(null);

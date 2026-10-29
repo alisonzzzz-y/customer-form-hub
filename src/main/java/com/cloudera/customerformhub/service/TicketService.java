@@ -2,8 +2,11 @@ package com.cloudera.customerformhub.service;
 
 import com.cloudera.customerformhub.entity.Ticket;
 import com.cloudera.customerformhub.repository.TicketRepository;
+import com.cloudera.customerformhub.repository.FormQuestionRepository;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
 
@@ -21,9 +24,11 @@ public class TicketService {
     );
 
     private final TicketRepository repository;
+    private final FormQuestionRepository questionRepository;
 
-    public TicketService(TicketRepository repository) {
+    public TicketService(TicketRepository repository, FormQuestionRepository questionRepository) {
         this.repository = repository;
+        this.questionRepository = questionRepository;
     }
 
     // Get all tickets
@@ -46,6 +51,7 @@ public class TicketService {
             if (existing != null) return existing;
         }
         ticket.setId(null);
+        ticket.setClosedAt(null);
         ticket.setWorkflowStage(normaliseStage(ticket.getWorkflowStage()));
         // Form import details are written by the import only.
         ticket.setFormFileName(null);
@@ -59,7 +65,7 @@ public class TicketService {
 
     // Create or update a ticket
     public Ticket saveTicket(Ticket ticket) {
-        ticket.setStatus(normaliseStatus(ticket.getStatus()));
+        applyStatus(ticket, ticket.getStatus());
         return repository.save(ticket);
     }
 
@@ -69,7 +75,7 @@ public class TicketService {
         if (ticket == null) {
             return null;
         }
-        ticket.setStatus(normaliseStatus(status));
+        applyStatus(ticket, status);
         return repository.save(ticket);
     }
 
@@ -80,10 +86,17 @@ public class TicketService {
         if (existing == null) {
             return null;
         }
+        String stage = normaliseStage(changes.getWorkflowStage());
+        if (stage != null && Set.of("review", "sme", "eta", "final").contains(stage)) {
+            var questions = questionRepository.findByTicketIdAndRetiredAtIsNull(id);
+            if (questions.isEmpty() || questions.stream().anyMatch(q -> !QuestionDepartments.isAssigned(q.getDepartment()))) {
+                throw new IllegalArgumentException("Assign an owning department to every question in Grouping before continuing");
+            }
+        }
         if (changes.getCustomerName() != null) existing.setCustomerName(changes.getCustomerName());
         if (changes.getCreatedBy() != null) existing.setCreatedBy(changes.getCreatedBy());
         if (changes.getAssignedTo() != null) existing.setAssignedTo(changes.getAssignedTo());
-        if (changes.getStatus() != null) existing.setStatus(normaliseStatus(changes.getStatus()));
+        if (changes.getStatus() != null) applyStatus(existing, changes.getStatus());
         if (changes.getUrgency() != null) existing.setUrgency(changes.getUrgency());
         if (changes.getNdaStatus() != null) existing.setNdaStatus(changes.getNdaStatus());
         if (changes.getDeadline() != null) existing.setDeadline(changes.getDeadline());
@@ -92,6 +105,18 @@ public class TicketService {
         if (changes.getWorkflowStage() != null) existing.setWorkflowStage(normaliseStage(changes.getWorkflowStage()));
         // createdAt is intentionally never overwritten
         return repository.save(existing);
+    }
+
+    // Set the status and keep closedAt in step: closing records the time once,
+    // reopening clears it, archiving keeps whatever it was.
+    static void applyStatus(Ticket ticket, String status) {
+        String normalised = normaliseStatus(status);
+        if ("Closed".equals(normalised)) {
+            if (ticket.getClosedAt() == null) ticket.setClosedAt(LocalDateTime.now(ZoneOffset.UTC));
+        } else if (!"Archived".equals(normalised)) {
+            ticket.setClosedAt(null);
+        }
+        ticket.setStatus(normalised);
     }
 
     static String normaliseStage(String stage) {

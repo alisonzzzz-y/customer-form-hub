@@ -29,6 +29,7 @@ public class Ticket {
 
     private LocalDateTime eta;       // expected completion (full date-time, UTC)
     private LocalDateTime createdAt; // when the ticket was created
+    private LocalDateTime closedAt;  // when it was last closed (UTC); cleared on reopen
 
     // Workflow step the user is on (intake / grouping / review / sme / eta /
     // final / done). Null for older rows, whose step is inferred from questions.
@@ -107,6 +108,9 @@ public class Ticket {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getClosedAt() { return closedAt; }
+    public void setClosedAt(LocalDateTime closedAt) { this.closedAt = closedAt; }
 
     public String getWorkflowStage() { return workflowStage; }
     public void setWorkflowStage(String workflowStage) { this.workflowStage = workflowStage; }

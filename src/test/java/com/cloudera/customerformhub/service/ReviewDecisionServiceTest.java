@@ -18,7 +18,7 @@ class ReviewDecisionServiceTest {
         when(repository.findById(7L)).thenReturn(Optional.of(question));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        FormQuestion result = new ReviewDecisionService(repository).escalate(7L, "AE", 42L);
+        FormQuestion result = new ReviewDecisionService(repository, mock(com.cloudera.customerformhub.repository.FinalAnswerRepository.class)).escalate(7L, "AE", 42L);
 
         assertEquals("Waiting AE", result.getStatus());
         assertEquals("ESCALATED", result.getReviewOutcome());
@@ -31,14 +31,30 @@ class ReviewDecisionServiceTest {
     void manualQuestionCanWaitForSmeWithoutEnteringAiMetrics() {
         FormQuestionRepository repository = mock(FormQuestionRepository.class);
         FormQuestion question = new FormQuestion();
+        question.setDepartment("Legal");
         when(repository.findById(8L)).thenReturn(Optional.of(question));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        FormQuestion result = new ReviewDecisionService(repository).escalate(8L, "SME", null);
+        FormQuestion result = new ReviewDecisionService(repository, mock(com.cloudera.customerformhub.repository.FinalAnswerRepository.class)).escalate(8L, "SME", null);
 
         assertEquals("SME Needed", result.getStatus());
         assertNull(result.getReviewOutcome());
         assertNotNull(result.getReviewedAt());
+    }
+
+    @Test
+    void missingDepartmentCannotBeRoutedToSme() {
+        for (String department : new String[] { null, "", " ", "General", " tbd " }) {
+            FormQuestionRepository repository = mock(FormQuestionRepository.class);
+            FormQuestion question = new FormQuestion();
+            question.setDepartment(department);
+            question.setStatus("Needs Review");
+            when(repository.findById(8L)).thenReturn(Optional.of(question));
+            assertThrows(IllegalArgumentException.class,
+                    () -> new ReviewDecisionService(repository, mock(com.cloudera.customerformhub.repository.FinalAnswerRepository.class)).escalate(8L, "SME", null));
+            assertEquals("Needs Review", question.getStatus());
+            verify(repository, never()).save(any());
+        }
     }
 
     @Test
@@ -51,7 +67,7 @@ class ReviewDecisionServiceTest {
         when(repository.findById(9L)).thenReturn(Optional.of(question));
         when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        FormQuestion result = new ReviewDecisionService(repository).reopen(9L);
+        FormQuestion result = new ReviewDecisionService(repository, mock(com.cloudera.customerformhub.repository.FinalAnswerRepository.class)).reopen(9L);
 
         assertEquals("Needs Review", result.getStatus());
         assertNull(result.getReviewOutcome());

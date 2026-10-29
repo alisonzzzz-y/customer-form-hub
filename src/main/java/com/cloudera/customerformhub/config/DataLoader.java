@@ -288,10 +288,12 @@ public class DataLoader implements CommandLineRunner {
                 ticket.setDeadline(demoDate(activeDueOffsets[index]));
                 ticket.setEta(demoDate(Math.max(activeDueOffsets[index] - 1, 0)).withHour(16));
                 ticket.setAssignedTo("Sarah Chen");
+                ticket.setClosedAt(null);
             } else {
                 ticket.setStatus("Closed");
                 ticket.setDeadline(today.minusDays((index % 21) + 2));
                 ticket.setEta(null);
+                ticket.setClosedAt(ticket.getDeadline());
             }
         }
         ticketRepository.saveAll(tickets);

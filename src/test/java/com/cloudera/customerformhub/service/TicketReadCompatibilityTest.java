@@ -19,6 +19,9 @@ class TicketReadCompatibilityTest {
     private TicketRepository repository;
 
     @Autowired
+    private com.cloudera.customerformhub.repository.FormQuestionRepository questionRepository;
+
+    @Autowired
     private TestEntityManager entityManager;
 
     @Test
@@ -29,7 +32,7 @@ class TicketReadCompatibilityTest {
         Long id = repository.saveAndFlush(dirty).getId();
         entityManager.clear();
 
-        TicketService service = new TicketService(repository);
+        TicketService service = new TicketService(repository, questionRepository);
 
         assertThat(service.getAllTickets())
                 .extracting(Ticket::getStatus)
@@ -47,7 +50,7 @@ class TicketReadCompatibilityTest {
         invalid.setCustomerName("Invalid write test");
         invalid.setStatus("Manual Legacy State");
 
-        TicketService service = new TicketService(repository);
+        TicketService service = new TicketService(repository, questionRepository);
 
         assertThatThrownBy(() -> service.saveTicket(invalid))
                 .isInstanceOf(IllegalArgumentException.class)

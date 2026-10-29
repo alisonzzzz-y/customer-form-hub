@@ -56,50 +56,49 @@ public class SmeRequestService {
         return repository.save(smeRequest);
     }
 
-    // Dispatch all SME Needed questions for one ticket into department-level SME requests
+    // Dispatch all SME Needed questions for one ticket into department-level SME
+    // requests. A question already waiting in an open request stays there; new
+    // ones go into the department's unsent draft, or a new request if the
+    // existing one was already sent.
     public List<SmeRequest> dispatchForTicket(Long ticketId) {
         List<FormQuestion> questions = questionRepository.findByTicketIdAndRetiredAtIsNull(ticketId);
+        List<SmeRequest> existingRequests = repository.findByTicketId(ticketId);
 
+        Map<String, Integer> newQuestionCounts = new LinkedHashMap<>();
         Set<String> departments = new LinkedHashSet<>();
-        Map<String, Integer> questionCounts = new LinkedHashMap<>();
         for (FormQuestion question : questions) {
             if ("SME Needed".equals(question.getStatus()) && question.getDepartment() != null) {
-                String department = question.getDepartment();
-                departments.add(department);
-                questionCounts.put(department, questionCounts.getOrDefault(department, 0) + 1);
-            }
-        }
-
-        List<SmeRequest> existingRequests = repository.findByTicketId(ticketId);
-        Map<String, SmeRequest> existingByDepartment = new LinkedHashMap<>();
-        for (SmeRequest request : existingRequests) {
-            if (request.getDepartment() != null) {
-                existingByDepartment.putIfAbsent(request.getDepartment(), request);
+                departments.add(question.getDepartment());
+                if (!smeRequestQuestionService.isInOpenRequest(question.getId())) {
+                    newQuestionCounts.merge(question.getDepartment(), 1, Integer::sum);
+                }
             }
         }
 
         List<SmeRequest> dispatchedRequests = new ArrayList<>();
         for (String department : departments) {
-            SmeRequest request = existingByDepartment.get(department);
-            if (request == null) {
-                request = new SmeRequest(
-                        ticketId,
-                        department,
-                        department + " Team",
-                        questionCounts.get(department),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null
-                );
-                request = repository.save(request);
+            List<SmeRequest> forDepartment = existingRequests.stream()
+                    .filter(r -> department.equals(r.getDepartment()))
+                    .toList();
+            int newCount = newQuestionCounts.getOrDefault(department, 0);
+            if (newCount == 0) {
+                // Everything is already packaged; report the open request.
+                forDepartment.stream().filter(r -> !"Returned".equals(r.getStatus()))
+                        .findFirst().ifPresent(dispatchedRequests::add);
+                continue;
             }
-
+            SmeRequest request = forDepartment.stream()
+                    .filter(smeRequestQuestionService::acceptsNewQuestions)
+                    .findFirst()
+                    .orElse(null);
+            if (request == null) {
+                request = repository.save(new SmeRequest(
+                        ticketId, department, department + " Team", newCount,
+                        null, null, null, null, null));
+            }
             smeRequestQuestionService.packageQuestions(request.getId(), ticketId, department);
             dispatchedRequests.add(request);
         }
-
         return dispatchedRequests;
     }
 

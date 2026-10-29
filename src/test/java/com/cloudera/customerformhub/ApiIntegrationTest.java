@@ -370,6 +370,28 @@ class ApiIntegrationTest {
     }
 
     @Test
+    void recordsWhenATicketIsClosedAndClearsItOnReopen() throws Exception {
+        Ticket ticket = ticketRepository.save(ticket("Close Co", "Approved"));
+        String status = "/api/tickets/{id}/status";
+
+        mockMvc.perform(patch(status, ticket.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"Closed\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.closedAt").isNotEmpty());
+        var closedAt = ticketRepository.findById(ticket.getId()).orElseThrow().getClosedAt();
+
+        // Archiving keeps the close time; reopening clears it.
+        mockMvc.perform(patch(status, ticket.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"Archived\"}"))
+                .andExpect(status().isOk());
+        assertEquals(closedAt, ticketRepository.findById(ticket.getId()).orElseThrow().getClosedAt());
+        mockMvc.perform(patch(status, ticket.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"Ready for Review\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.closedAt").value(nullValue()));
+    }
+
+    @Test
     void aRetriedCreateWithTheSameClientRefReturnsTheSameTicket() throws Exception {
         String body = "{\"customerName\":\"Retry Co\",\"status\":\"Intake Review\",\"clientRef\":\"tab-7f3a-1\"}";
         String first = mockMvc.perform(post("/api/tickets").contentType(MediaType.APPLICATION_JSON).content(body))
@@ -493,6 +515,124 @@ class ApiIntegrationTest {
             return new MockMultipartFile("file", fileName,
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
         }
+    }
+
+    @Test
+    void appendsToExistingSmePackageWithoutDuplicatesOrLosingAnswers() throws Exception {
+        var t = ticketRepository.save(ticket("Append fixture", "Waiting SME"));
+        var q1 = questionRepository.save(question(t.getId(), "First question?", "InfoSec", "SME Needed"));
+        var request = new com.cloudera.customerformhub.entity.SmeRequest();
+        request.setTicketId(t.getId());
+        request.setDepartment("InfoSec");
+        request.setStatus("Draft Prepared");
+        request = smeRequestRepository.save(request);
+        String body = "{\"smeRequestId\":" + request.getId() + ",\"ticketId\":" + t.getId() + ",\"department\":\"InfoSec\"}";
+        mockMvc.perform(post("/api/sme-request-questions/package").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+        var oldLink = smeRequestQuestionRepository.findBySmeRequestId(request.getId()).get(0);
+        oldLink.setReturnedAnswer("Keep this original answer");
+        oldLink.setStatus("Returned");
+        smeRequestQuestionRepository.save(oldLink);
+        q1.setStatus("Answered");
+        questionRepository.save(q1);
+        request.setStatus("ETA Confirmed");
+        request.setSentAt(LocalDateTime.now());
+        request.setEta(LocalDateTime.now().plusDays(2));
+        smeRequestRepository.save(request);
+        var sentAt = request.getSentAt();
+        var eta = request.getEta();
+        var q2 = questionRepository.save(question(t.getId(), "Second question?", "InfoSec", "SME Needed"));
+
+        // The sent request keeps its send record and ETA: it does not take new questions.
+        mockMvc.perform(post("/api/sme-request-questions/package").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest());
+        var unchanged = smeRequestRepository.findById(request.getId()).orElseThrow();
+        assertEquals("ETA Confirmed", unchanged.getStatus());
+        assertEquals(sentAt.withNano(0), unchanged.getSentAt().withNano(0));
+        assertEquals(eta.withNano(0), unchanged.getEta().withNano(0));
+        assertEquals(1, smeRequestQuestionRepository.findBySmeRequestId(request.getId()).size());
+        assertEquals("Keep this original answer", smeRequestQuestionRepository.findById(oldLink.getId()).orElseThrow().getReturnedAnswer());
+
+        // The new question goes into a new draft request, once, however often it is packaged.
+        var second = new com.cloudera.customerformhub.entity.SmeRequest();
+        second.setTicketId(t.getId());
+        second.setDepartment("InfoSec");
+        second.setStatus("Draft Prepared");
+        second = smeRequestRepository.save(second);
+        String secondBody = "{\"smeRequestId\":" + second.getId() + ",\"ticketId\":" + t.getId() + ",\"department\":\"InfoSec\"}";
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(post("/api/sme-request-questions/package").contentType(MediaType.APPLICATION_JSON).content(secondBody))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)))
+                    .andExpect(jsonPath("$[0].questionId").value(q2.getId()));
+        }
+        assertEquals(1, smeRequestRepository.findById(second.getId()).orElseThrow().getQuestionCount());
+    }
+
+    @Test
+    void anUnsentDraftTakesLaterQuestionsAndAQuestionIsNeverPackagedTwice() throws Exception {
+        var t = ticketRepository.save(ticket("Draft append", "Waiting SME"));
+        questionRepository.save(question(t.getId(), "First?", "Legal", "SME Needed"));
+        var draft = new com.cloudera.customerformhub.entity.SmeRequest();
+        draft.setTicketId(t.getId());
+        draft.setDepartment("Legal");
+        draft.setStatus("Draft Prepared");
+        draft = smeRequestRepository.save(draft);
+        String body = "{\"smeRequestId\":" + draft.getId() + ",\"ticketId\":" + t.getId() + ",\"department\":\"Legal\"}";
+        mockMvc.perform(post("/api/sme-request-questions/package").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+        questionRepository.save(question(t.getId(), "Second?", "Legal", "SME Needed"));
+        mockMvc.perform(post("/api/sme-request-questions/package").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(2)));
+
+        // Dispatch finds nothing new: both are already waiting in the open draft.
+        mockMvc.perform(post("/api/sme-requests/dispatch/ticket/{id}", t.getId()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)));
+        assertEquals(1, smeRequestRepository.count());
+        assertEquals(2, smeRequestQuestionRepository.count());
+    }
+
+    @Test
+    void previewsRealReturnedWorkbookThroughHttpWithoutSavingAnswers() throws Exception {
+        var t = ticketRepository.save(ticket("Import fixture", "Waiting SME"));
+        var q = questionRepository.save(question(t.getId(), "Actual question?", "Legal", "SME Needed"));
+        var request = new com.cloudera.customerformhub.entity.SmeRequest();
+        request.setTicketId(t.getId()); request.setDepartment("Legal");
+        request = smeRequestRepository.save(request);
+        var link = new com.cloudera.customerformhub.entity.SmeRequestQuestion(request.getId(), q.getId(), "Pending", null, null);
+        smeRequestQuestionRepository.save(link);
+        try (var workbook = new XSSFWorkbook(); var out = new ByteArrayOutputStream()) {
+            var sheet = workbook.createSheet("Legal");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("Question");
+            header.createCell(1).setCellValue("SME Answer");
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue(q.getQuestionText());
+            row.createCell(1).setCellValue("Real answer from the uploaded workbook");
+            workbook.write(out);
+            var file = new MockMultipartFile("file", "returned.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", out.toByteArray());
+            mockMvc.perform(multipart("/api/sme-request-questions/request/" + request.getId() + "/import-preview").file(file))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$['" + q.getId() + "']").value("Real answer from the uploaded workbook"));
+        }
+        assertEquals(0, finalAnswerRepository.count());
+        mockMvc.perform(multipart("/api/sme-request-questions/request/" + request.getId() + "/import-preview")
+                        .file(new MockMultipartFile("file", "invalid.xlsx", "", "invalid".getBytes())))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void reopeningReviewAlsoMakesTheSavedAnswerADraft() throws Exception {
+        var t = ticketRepository.save(ticket("Undo fixture", "In Progress"));
+        var q = questionRepository.save(question(t.getId(), "Question to reopen?", "Legal", "Answered"));
+        var answer = new FinalAnswer();
+        answer.setQuestionId(q.getId());
+        answer.setAnswerText("Previously approved");
+        answer.setApprovalStatus("Confirmed");
+        finalAnswerRepository.save(answer);
+        mockMvc.perform(post("/api/questions/" + q.getId() + "/review-reopen")
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("Needs Review"));
+        assertEquals("Draft", finalAnswerRepository.findByQuestionId(q.getId()).get(0).getApprovalStatus());
     }
 
     private Ticket ticket(String customerName, String status) {

@@ -22,7 +22,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 @Order(0)
@@ -205,128 +207,135 @@ public class DataLoader implements CommandLineRunner {
         });
     }
 
+    // The seeded demo tickets. clientRef marks each row as demo data, so the
+    // rolling refresh can find it again and never touches tickets people create.
+    record DemoTicket(String clientRef, String customerName, String createdBy, String assignedTo,
+                      String status, String urgency, String ndaStatus, int dueOffset,
+                      String businessImpact, Integer etaOffset, int createdOffset) {
+    }
+
+    static final List<DemoTicket> DEMO_TICKETS = List.of(
+            new DemoTicket("demo-seed-acme", "Acme Corp", "—", "Unassigned", "New",
+                    "Medium", "Yes", 7, "New logo, evaluating platform", null, -5),
+            new DemoTicket("demo-seed-globex", "Globex Inc", "Jane Smith", "Sarah", "Intake Review",
+                    "High", "Unknown", 0, "Renewal, medium value", 2, -4),
+            new DemoTicket("demo-seed-initech", "Initech", "—", "Sarah", "In Progress",
+                    "Medium", "Yes", 4, "Expansion opportunity", 3, -3),
+            new DemoTicket("demo-seed-umbrella", "Umbrella Co", "—", "Alex", "Waiting SME",
+                    "High", "Yes", -2, "Strategic account renewal", 1, -7));
+
+    // The seeded SME requests of the Globex ticket, one per department.
+    record DemoSmeRequest(String department, String teamName, int questionCount,
+                          Integer etaOffset, int etaHour, String status, String confirmedBy) {
+    }
+
+    static final List<DemoSmeRequest> DEMO_SME_REQUESTS = List.of(
+            new DemoSmeRequest("InfoSec", "InfoSec Team", 12, 1, 15, "ETA Confirmed", "Confirmed via email by Alex"),
+            new DemoSmeRequest("Legal", "Legal Team", 5, null, 0, "Waiting for ETA", null),
+            new DemoSmeRequest("HR", "HR Ops", 8, 2, 17, "ETA Confirmed", "Confirmed by HR lead"),
+            new DemoSmeRequest("Finance", "Finance Team", 6, -1, 14, "Overdue", null),
+            new DemoSmeRequest("ESG", "ESG Team", 5, 4, 12, "In Progress", null));
+
+    private LocalDateTime demoEta(Integer offset, int hour) {
+        return offset == null ? null : demoDate(offset).withHour(hour);
+    }
+
     private Long seedTickets() {
-        // customerName, createdBy, assignedTo, status, urgency, ndaStatus, deadline, businessImpact, eta, createdAt
-        ticketRepository.save(new Ticket(
-                "Acme Corp", "—", "Unassigned", "New",
-                "Medium", "Yes", demoDate(7),
-                "New logo, evaluating platform", null, demoDate(-5)));
-
-        Ticket globex = ticketRepository.save(new Ticket(
-                "Globex Inc", "Jane Smith", "Sarah", "Intake Review",
-                "High", "Unknown", demoDate(0),
-                "Renewal, medium value", demoDate(2), demoDate(-4)));
-
-        ticketRepository.save(new Ticket(
-                "Initech", "—", "Sarah", "In Progress",
-                "Medium", "Yes", demoDate(4),
-                "Expansion opportunity", demoDate(3), demoDate(-3)));
-
-        ticketRepository.save(new Ticket(
-                "Umbrella Co", "—", "Alex", "Waiting SME",
-                "High", "Yes", demoDate(-2),
-                "Strategic account renewal", demoDate(1), demoDate(-7)));
+        Long globexId = null;
+        for (DemoTicket demo : DEMO_TICKETS) {
+            Ticket ticket = new Ticket(
+                    demo.customerName(), demo.createdBy(), demo.assignedTo(), demo.status(),
+                    demo.urgency(), demo.ndaStatus(), demoDate(demo.dueOffset()),
+                    demo.businessImpact(), demoEta(demo.etaOffset(), 0), demoDate(demo.createdOffset()));
+            ticket.setClientRef(demo.clientRef());
+            ticket = ticketRepository.save(ticket);
+            if ("demo-seed-globex".equals(demo.clientRef())) globexId = ticket.getId();
+        }
 
         System.out.println(">>> DataLoader: inserted " + ticketRepository.count() + " tickets.");
 
         // Return the real, database-generated id of the Globex ticket
-        return globex.getId();
+        return globexId;
     }
 
     private void seedSmeRequests(Long globexTicketId) {
         // These SME requests belong to the Globex Inc ticket.
-
-        smeRequestRepository.save(new SmeRequest(
-                globexTicketId, "InfoSec", "InfoSec Team", 12,
-                demoDate(1).withHour(15), "ETA Confirmed", "Confirmed via email by Alex",
-                demoDate(-2).withHour(10), null));
-
-        smeRequestRepository.save(new SmeRequest(
-                globexTicketId, "Legal", "Legal Team", 5,
-                null, "Waiting for ETA", null,
-                demoDate(-2).withHour(10), null));
-
-        smeRequestRepository.save(new SmeRequest(
-                globexTicketId, "HR", "HR Ops", 8,
-                demoDate(2).withHour(17), "ETA Confirmed", "Confirmed by HR lead",
-                demoDate(-2).withHour(10), null));
-
-        smeRequestRepository.save(new SmeRequest(
-                globexTicketId, "Finance", "Finance Team", 6,
-                demoDate(-1).withHour(14), "Overdue", null,
-                demoDate(-2).withHour(10), null));
-
-        smeRequestRepository.save(new SmeRequest(
-                globexTicketId, "ESG", "ESG Team", 5,
-                demoDate(4).withHour(12), "In Progress", null,
-                demoDate(-2).withHour(10), null));
+        for (DemoSmeRequest demo : DEMO_SME_REQUESTS) {
+            smeRequestRepository.save(new SmeRequest(
+                    globexTicketId, demo.department(), demo.teamName(), demo.questionCount(),
+                    demoEta(demo.etaOffset(), demo.etaHour()), demo.status(), demo.confirmedBy(),
+                    demoDate(-2).withHour(10), null));
+        }
 
         System.out.println(">>> DataLoader: inserted " + smeRequestRepository.count() + " SME requests.");
     }
 
     /**
-     * One-time maintenance for a disposable demo database. It keeps ten active
-     * tickets, with a small mix of due-today, overdue, and upcoming work, and
-     * marks all other demo records as closed. The related properties are off by default.
+     * Moves the seeded demo tickets and their SME requests back to their seeded
+     * state with dates relative to today. Only rows the seeder created are
+     * touched: tickets people create, and demo tickets someone archived, keep
+     * everything they have. The related properties are off by default.
      */
-    private void refreshDemoData() {
-        LocalDateTime today = demoDate(0);
-        int[] activeDueOffsets = {0, 0, 0, 2, 4, 7, 10, 14, 21, -2};
-        String[] activeStatuses = {
-                "Intake Review", "Ready for Review", "In Progress", "Waiting SME", "In Progress",
-                "New", "Ready for Review", "In Progress", "Waiting SME", "In Progress"
-        };
+    void refreshDemoData() {
+        Map<String, Ticket> demoTickets = findDemoTickets();
+        for (DemoTicket demo : DEMO_TICKETS) {
+            Ticket ticket = demoTickets.get(demo.clientRef());
+            if (ticket == null || "Archived".equals(ticket.getStatus())) continue;
+            ticket.setStatus(demo.status());
+            ticket.setAssignedTo(demo.assignedTo());
+            ticket.setDeadline(demoDate(demo.dueOffset()));
+            ticket.setEta(demoEta(demo.etaOffset(), 0));
+            ticket.setClosedAt(null);
+            // The step is inferred again from the data, so it matches the status.
+            ticket.setWorkflowStage(null);
+            ticketRepository.save(ticket);
+        }
 
-        List<Ticket> tickets = ticketRepository.findAll().stream()
-                .sorted(Comparator.comparing(Ticket::getId).reversed())
-                .toList();
-
-        for (int index = 0; index < tickets.size(); index++) {
-            Ticket ticket = tickets.get(index);
-            if (index < activeDueOffsets.length) {
-                ticket.setStatus(activeStatuses[index]);
-                ticket.setDeadline(demoDate(activeDueOffsets[index]));
-                ticket.setEta(demoDate(Math.max(activeDueOffsets[index] - 1, 0)).withHour(16));
-                ticket.setAssignedTo("Sarah Chen");
-                ticket.setClosedAt(null);
-            } else {
-                ticket.setStatus("Closed");
-                ticket.setDeadline(today.minusDays((index % 21) + 2));
-                ticket.setEta(null);
-                ticket.setClosedAt(ticket.getDeadline());
+        Ticket globex = demoTickets.get("demo-seed-globex");
+        if (globex != null && !"Archived".equals(globex.getStatus())) {
+            // The first request per seeded department is the seeded one; later
+            // requests on this ticket were made by people and are left alone.
+            Map<String, SmeRequest> seededByDepartment = new HashMap<>();
+            smeRequestRepository.findByTicketId(globex.getId()).stream()
+                    .sorted(Comparator.comparing(SmeRequest::getId))
+                    .forEach(request -> seededByDepartment.putIfAbsent(request.getDepartment(), request));
+            for (DemoSmeRequest demo : DEMO_SME_REQUESTS) {
+                SmeRequest request = seededByDepartment.get(demo.department());
+                if (request == null) continue;
+                request.setStatus(demo.status());
+                request.setEta(demoEta(demo.etaOffset(), demo.etaHour()));
+                request.setSentAt(demoDate(-2).withHour(10));
+                request.setReturnedAt(null);
+                smeRequestRepository.save(request);
             }
         }
-        ticketRepository.saveAll(tickets);
+        System.out.println(">>> DataLoader: refreshed dates of " + demoTickets.size() + " seeded demo tickets.");
+    }
 
-        List<SmeRequest> requests = smeRequestRepository.findAll().stream()
-                .sorted(Comparator.comparing(SmeRequest::getId).reversed())
+    // The seeded tickets, by clientRef. A database seeded before tickets carried
+    // a clientRef gets it now: the oldest unmarked ticket with the seed's
+    // customer and business impact is the seeded one.
+    private Map<String, Ticket> findDemoTickets() {
+        List<Ticket> all = ticketRepository.findAll().stream()
+                .sorted(Comparator.comparing(Ticket::getId))
                 .toList();
-        for (int index = 0; index < requests.size(); index++) {
-            SmeRequest request = requests.get(index);
-            if (index == 0) {
-                request.setStatus("ETA Confirmed");
-                request.setEta(today.plusDays(1).withHour(15));
-                request.setReturnedAt(null);
-            } else if (index == 1) {
-                request.setStatus("ETA Confirmed");
-                request.setEta(today.plusDays(2).withHour(11));
-                request.setReturnedAt(null);
-            } else if (index == 2) {
-                request.setStatus("Overdue");
-                request.setEta(today.minusDays(1).withHour(14));
-                request.setReturnedAt(null);
-            } else if (index == 3) {
-                request.setStatus("Waiting for ETA");
-                request.setEta(null);
-                request.setReturnedAt(null);
-            } else {
-                request.setStatus("Returned");
-                request.setEta(today.minusDays(1));
-                request.setReturnedAt(today.minusDays(1).withHour(12));
-            }
+        Map<String, Ticket> found = new HashMap<>();
+        for (DemoTicket demo : DEMO_TICKETS) {
+            all.stream()
+                    .filter(t -> demo.clientRef().equals(t.getClientRef()))
+                    .findFirst()
+                    .or(() -> all.stream()
+                            .filter(t -> t.getClientRef() == null
+                                    && demo.customerName().equals(t.getCustomerName())
+                                    && demo.businessImpact().equals(t.getBusinessImpact()))
+                            .findFirst()
+                            .map(t -> {
+                                t.setClientRef(demo.clientRef());
+                                return ticketRepository.save(t);
+                            }))
+                    .ifPresent(t -> found.put(demo.clientRef(), t));
         }
-        smeRequestRepository.saveAll(requests);
-        System.out.println(">>> DataLoader: refreshed demo dates (10 active tickets, 1 overdue ticket, 3 due today).");
+        return found;
     }
 
     private void seedFormQuestions(Long globexTicketId) {

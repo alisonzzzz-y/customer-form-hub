@@ -5,6 +5,7 @@ import com.cloudera.customerformhub.repository.KnowledgeBaseRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -47,6 +48,7 @@ public class KnowledgeBaseService {
         if (existing == null) {
             return null;
         }
+        boolean contentChanged = !Objects.equals(existing.getContent(), updated.getContent());
         // copy the editable fields onto the existing row
         existing.setDocumentTitle(updated.getDocumentTitle());
         existing.setSectionTitle(updated.getSectionTitle());
@@ -67,8 +69,11 @@ public class KnowledgeBaseService {
         }
         normaliseLifecycle(existing);
 
-        // content may have changed, so regenerate the embedding
-        regenerateEmbedding(existing);
+        // Only new content needs a new embedding. A status or sharing change
+        // keeps the stored vector, so it does not depend on the embedding API.
+        if (contentChanged || existing.getEmbedding() == null || existing.getEmbedding().isBlank()) {
+            regenerateEmbedding(existing);
+        }
         return knowledgeBaseRepository.save(existing);
     }
 

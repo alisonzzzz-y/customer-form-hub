@@ -28,6 +28,11 @@ public class SmeRequestQuestionService {
         this.formQuestionRepository = formQuestionRepository;
     }
 
+    // Get every SME-request record, for the app's startup load
+    public List<SmeRequestQuestion> getAll() {
+        return repository.findAll();
+    }
+
     // Get all questions in a given SME request
     public List<SmeRequestQuestion> getByRequest(Long smeRequestId) {
         return repository.findBySmeRequestId(smeRequestId);

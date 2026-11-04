@@ -18,6 +18,12 @@ public class SmeRequestQuestionController {
         this.service = service;
     }
 
+    // GET /api/sme-request-questions  → all records
+    @GetMapping
+    public List<SmeRequestQuestion> getAll() {
+        return service.getAll();
+    }
+
     // GET /api/sme-request-questions/request/{smeRequestId}  → all questions in a request
     @GetMapping("/request/{smeRequestId}")
     public List<SmeRequestQuestion> getByRequest(@PathVariable Long smeRequestId) {

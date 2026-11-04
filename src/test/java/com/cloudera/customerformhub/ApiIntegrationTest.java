@@ -4,6 +4,7 @@ import com.cloudera.customerformhub.config.DataLoader;
 import com.cloudera.customerformhub.entity.FinalAnswer;
 import com.cloudera.customerformhub.entity.FormQuestion;
 import com.cloudera.customerformhub.entity.RetrievalEvaluationRun;
+import com.cloudera.customerformhub.entity.SmeRequestQuestion;
 import com.cloudera.customerformhub.entity.Ticket;
 import com.cloudera.customerformhub.repository.FinalAnswerRepository;
 import com.cloudera.customerformhub.repository.FormQuestionRepository;
@@ -92,6 +93,18 @@ class ApiIntegrationTest {
         questionRepository.deleteAll();
         ticketRepository.deleteAll();
         evaluationRunRepository.deleteAll();
+    }
+
+    @Test
+    void listsEverySmeRequestQuestionForTheStartupLoad() throws Exception {
+        smeRequestQuestionRepository.save(new SmeRequestQuestion(1L, 10L, "Pending", "reason", null));
+        smeRequestQuestionRepository.save(new SmeRequestQuestion(2L, 20L, "Returned", "reason", "answer"));
+
+        mockMvc.perform(get("/api/sme-request-questions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[1].smeRequestId").value(2))
+                .andExpect(jsonPath("$[1].questionId").value(20));
     }
 
     @Test

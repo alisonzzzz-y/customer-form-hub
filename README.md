@@ -14,6 +14,12 @@ The screenshots belong in the frontend README because it is the main project ent
 Link to the frontend README from here rather than repeating the same images.
 -->
 
+## Demo video
+
+[![Customer Forms Hub product demo on YouTube](https://img.youtube.com/vi/jKkGkgNqsO4/maxresdefault.jpg)](https://youtu.be/jKkGkgNqsO4)
+
+[▶ Watch the 5-minute demo on YouTube](https://youtu.be/jKkGkgNqsO4)
+
 ## What the application does
 
 ```text

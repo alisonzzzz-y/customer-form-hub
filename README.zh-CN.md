@@ -13,6 +13,12 @@ AI 帮助整理问题和寻找相关的内部资料。审核者可以接受答�
 后端 README 只链接到前端 README，不重复放相同图片。
 -->
 
+## 演示视频
+
+[![在 YouTube 观看 Customer Forms Hub 产品演示](https://img.youtube.com/vi/jKkGkgNqsO4/maxresdefault.jpg)](https://youtu.be/jKkGkgNqsO4)
+
+[▶ 在 YouTube 观看 5 分钟演示](https://youtu.be/jKkGkgNqsO4)
+
 ## 应用可以做什么
 
 ```text

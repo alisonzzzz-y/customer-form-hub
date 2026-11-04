@@ -9,8 +9,8 @@ AI 帮助整理问题和寻找相关的内部资料。审核者可以接受答�
 [英文 README](README.md) · [前端仓库](https://github.com/alisonzzzz-y/customer-form-hub-frontend)
 
 <!--
-截图应放在前端 README，因为前端仓库是项目的主要展示入口。
-后端 README 只链接到前端 README，不重复放相同图片。
+这个 README 是项目的主要展示入口。
+截图目前放在前端 README。
 -->
 
 ## 演示视频

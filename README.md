@@ -10,8 +10,8 @@ AI helps sort questions and find useful internal sources. A reviewer can then ac
 
 <!--
 SCREENSHOT NOTE
-The screenshots belong in the frontend README because it is the main project entry point.
-Link to the frontend README from here rather than repeating the same images.
+This README is the main project entry point.
+The screenshots are currently in the frontend README.
 -->
 
 ## Demo video
